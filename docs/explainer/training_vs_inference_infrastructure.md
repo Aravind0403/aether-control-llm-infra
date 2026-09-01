@@ -148,16 +148,16 @@ The fault-tolerance requirements for training and inference are polar opposites 
 
 ---
 
-### 🔬 Empirical Resilience & Micro-Benchmark Evidence
+### 🔬 Single-GPU Micro-Benchmarking & Manifest Controls
 
-We test system behavior under hardware stress using both single-GPU micro-benchmarks and container manifests:
+Instead of relying on theoretical metrics, system behavior under hardware constraints is verified directly via codebase configuration parameters and local PyTorch memory profiling:
 
-1. **VRAM Headroom Exhaustion & Swapping:**  
-   Restricting GPU VRAM threshold (`--gpu-memory-utilization 0.40` in [vllm-deployment.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/manifests/vllm-deployment.yaml)) forces vLLM to swap KV-cache blocks to host CPU RAM over PCIe, causing generation throughput to collapse and $P_{99}$ latency to spike.
+1. **VRAM Headroom Allocation:**  
+   Restricting `--gpu-memory-utilization` (configured in [vllm-deployment.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/manifests/vllm-deployment.yaml)) controls KV-cache block pool capacity. Setting too low a threshold forces vLLM to swap active sequence KV-blocks to CPU host RAM over PCIe.
 2. **Head-of-Line Blocking Mitigation:**  
-   In mixed-traffic serving, massive prefill queries block short 10-token queries. Enabling `--enable-chunked-prefill` (chunk size 2048 in [vllm-deployment.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/manifests/vllm-deployment.yaml)) interleaves prefill steps, protecting short query $P_{99}$ TTFT SLAs.
-3. **Preemption Protection & Graceful Drain:**  
-   Un-gated concurrency bursts under restricted VRAM trigger sequence preemptions. Resolved by `trainsight` pre-flight sequence variance checks ($\sigma/\mu \le 0.75$) and K8s `preStop` drain hooks.
+   In mixed-traffic serving, massive prompt prefill steps can block short requests. Enabling `--enable-chunked-prefill` (with `--max-num-batched-tokens 2048` in [vllm-deployment.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/manifests/vllm-deployment.yaml)) breaks prefill tasks into 2048-token chunks, protecting short query latency SLAs.
+3. **Preemption & Graceful Drain:**  
+   High sequence variance under memory pressure triggers sequence preemptions. Resolved by `trainsight` dataset variance checks ($\sigma/\mu \le 0.75$) and K8s lifecycle `preStop` drain hooks.
 
 ---
 
