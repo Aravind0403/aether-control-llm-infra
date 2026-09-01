@@ -74,7 +74,7 @@ $$M_{\text{train}} = M_{\text{params}} + M_{\text{grads}} + M_{\text{opt\_states
 
 ### 📊 Empirical Proof Run (Local Profiling Script)
 
-We execute [demo/profile_training_vs_inference.py](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/demo/profile_training_vs_inference.py) locally to output side-by-side memory profiles for both the **Qwen2.5-1.5B** codebase model and the **Qwen2.5-70B** cloud model:
+We execute [demo/profile_training_vs_inference.py](../../demo/profile_training_vs_inference.py) locally to output side-by-side memory profiles for both the **Qwen2.5-1.5B** codebase model and the **Qwen2.5-70B** cloud model:
 
 ```text
 ================================================================================
@@ -153,9 +153,9 @@ The fault-tolerance requirements for training and inference are polar opposites 
 Instead of relying on theoretical metrics, system behavior under hardware constraints is verified directly via codebase configuration parameters and local PyTorch memory profiling:
 
 1. **VRAM Headroom Allocation:**  
-   Restricting `--gpu-memory-utilization` (configured in [vllm-deployment.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/manifests/vllm-deployment.yaml)) controls KV-cache block pool capacity. Setting too low a threshold forces vLLM to swap active sequence KV-blocks to CPU host RAM over PCIe.
+   Restricting `--gpu-memory-utilization` (configured in [vllm-deployment.yaml](../../k8s-infra/manifests/vllm-deployment.yaml)) controls KV-cache block pool capacity. Setting too low a threshold forces vLLM to swap active sequence KV-blocks to CPU host RAM over PCIe.
 2. **Head-of-Line Blocking Mitigation:**  
-   In mixed-traffic serving, massive prompt prefill steps can block short requests. Enabling `--enable-chunked-prefill` (with `--max-num-batched-tokens 2048` in [vllm-deployment.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/manifests/vllm-deployment.yaml)) breaks prefill tasks into 2048-token chunks, protecting short query latency SLAs.
+   In mixed-traffic serving, massive prompt prefill steps can block short requests. Enabling `--enable-chunked-prefill` (with `--max-num-batched-tokens 2048` in [vllm-deployment.yaml](../../k8s-infra/manifests/vllm-deployment.yaml)) breaks prefill tasks into 2048-token chunks, protecting short query latency SLAs.
 3. **Preemption & Graceful Drain:**  
    High sequence variance under memory pressure triggers sequence preemptions. Resolved by `trainsight` dataset variance checks ($\sigma/\mu \le 0.75$) and K8s lifecycle `preStop` drain hooks.
 
@@ -176,8 +176,8 @@ Instead of relying on theoretical metrics, system behavior under hardware constr
 ---
 
 ### 📂 Committed Repository Assets & Evidence Links
-* 🧪 **Live Profiling Script:** [profile_training_vs_inference.py](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/demo/profile_training_vs_inference.py)
-* 📄 **Hardware & Roofline Dossier:** [08_gpu_profiling_and_roofline.md](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/docs/dossier/08_gpu_profiling_and_roofline.md)
-* ⚙️ **vLLM Deployment Manifest:** [vllm-deployment.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/manifests/vllm-deployment.yaml)
-* ☁️ **RayCluster Training Manifest:** [ray-cluster-grpo.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/manifests/ray-cluster-grpo.yaml)
+* 🧪 **Live Profiling Script:** [profile_training_vs_inference.py](../../demo/profile_training_vs_inference.py)
+* 📄 **Hardware & Roofline Dossier:** [08_gpu_profiling_and_roofline.md](../dossier/08_gpu_profiling_and_roofline.md)
+* ⚙️ **vLLM Deployment Manifest:** [vllm-deployment.yaml](../../k8s-infra/manifests/vllm-deployment.yaml)
+* ☁️ **RayCluster Training Manifest:** [ray-cluster-grpo.yaml](../../k8s-infra/manifests/ray-cluster-grpo.yaml)
 
