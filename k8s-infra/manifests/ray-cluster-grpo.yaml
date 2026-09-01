@@ -1,0 +1,41 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: aethercontrol-grpo
+  namespace: default
+spec:
+  rayVersion: '2.54.0'
+  headGroupSpec:
+    rayStartParams:
+      dashboard-host: '0.0.0.0'
+    template:
+      spec:
+        containers:
+        - name: ray-head
+          image: rayproject/ray:2.54.0-py310
+          resources:
+            limits:
+              cpu: "8"
+              memory: "16Gi"
+            requests:
+              cpu: "4"
+              memory: "8Gi"
+  workerGroupSpecs:
+  - groupName: gpu-worker-group
+    replicas: 2
+    minReplicas: 1
+    maxReplicas: 4
+    template:
+      spec:
+        containers:
+        - name: ray-worker
+          image: rayproject/ray:2.54.0-py310-gpu
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+              cpu: "8"
+              memory: "32Gi"
+            requests:
+              nvidia.com/gpu: "1"
+              cpu: "4"
+              memory: "16Gi"

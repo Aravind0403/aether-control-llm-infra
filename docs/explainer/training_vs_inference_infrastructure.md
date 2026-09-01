@@ -148,16 +148,16 @@ The fault-tolerance requirements for training and inference are polar opposites 
 
 ---
 
-### 🔬 Empirical Failure Injection Evidence (AetherControl Portfolio)
+### 🔬 Empirical Resilience & Micro-Benchmark Evidence
 
-In our empirical failure injection experiments ([Doc_Content/failure_experiments.md](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/Doc_Content/failure_experiments.md)), we tested system behavior under hardware stress:
+We test system behavior under hardware stress using both single-GPU micro-benchmarks and container manifests:
 
-1. **EXP-001 (VRAM Headroom Exhaustion):**  
-   Restricting GPU VRAM threshold (`--gpu-memory-utilization 0.40`) forced vLLM to swap KV-cache blocks to host CPU RAM over PCIe, causing generation throughput to collapse by **-81.0%** ($179.9 \to 34.2\text{ tok/s}$) and $P_{99}$ latency to spike by **+776%**.
-2. **EXP-004 (Head-of-Line Blocking):**  
-   In mixed-traffic serving, massive 8K prefill queries blocked short 10-token queries. Enabling `--enable-chunked-prefill` (chunk size 2048) reduced $P_{99}$ TTFT latency by **88.9%** (from $580.0\text{ ms} \to 64.2\text{ ms}$).
-3. **EXP-005 (Preemption Storms):**  
-   Un-gated concurrency bursts under restricted VRAM triggered 142 sequence preemptions, crashing effective token throughput by **-93.1%**. Resolved by TrainSight pre-flight sequence variance checks ($\sigma/\mu \le 0.75$).
+1. **VRAM Headroom Exhaustion & Swapping:**  
+   Restricting GPU VRAM threshold (`--gpu-memory-utilization 0.40` in [vllm-deployment.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/manifests/vllm-deployment.yaml)) forces vLLM to swap KV-cache blocks to host CPU RAM over PCIe, causing generation throughput to collapse and $P_{99}$ latency to spike.
+2. **Head-of-Line Blocking Mitigation:**  
+   In mixed-traffic serving, massive prefill queries block short 10-token queries. Enabling `--enable-chunked-prefill` (chunk size 2048 in [vllm-deployment.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/manifests/vllm-deployment.yaml)) interleaves prefill steps, protecting short query $P_{99}$ TTFT SLAs.
+3. **Preemption Protection & Graceful Drain:**  
+   Un-gated concurrency bursts under restricted VRAM trigger sequence preemptions. Resolved by `trainsight` pre-flight sequence variance checks ($\sigma/\mu \le 0.75$) and K8s `preStop` drain hooks.
 
 ---
 
@@ -175,8 +175,9 @@ In our empirical failure injection experiments ([Doc_Content/failure_experiments
 
 ---
 
-### 📂 Repository File Index & Evidence Links
-* 📄 **Theoretical & Benchmark Dossier:** [08_gpu_profiling_and_roofline.md](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/docs/dossier/08_gpu_profiling_and_roofline.md)
-* 🧪 **Empirical Profiling Script:** [profile_training_vs_inference.py](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/demo/profile_training_vs_inference.py)
-* ⚠️ **Failure Experiments Report:** [failure_experiments.md](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/Doc_Content/failure_experiments.md)
-* 🏛️ **Architecture Q&A Dossier:** [QA_on_Architecture_and_Platform.md](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/Doc_Content/QA_on_Architecture_and_Platform.md)
+### 📂 Committed Repository Assets & Evidence Links
+* 🧪 **Live Profiling Script:** [profile_training_vs_inference.py](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/demo/profile_training_vs_inference.py)
+* 📄 **Hardware & Roofline Dossier:** [08_gpu_profiling_and_roofline.md](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/docs/dossier/08_gpu_profiling_and_roofline.md)
+* ⚙️ **vLLM Deployment Manifest:** [vllm-deployment.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/manifests/vllm-deployment.yaml)
+* ☁️ **RayCluster Training Manifest:** [ray-cluster-grpo.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/manifests/ray-cluster-grpo.yaml)
+
