@@ -34,3 +34,19 @@ def test_sft_inspector_detects_duplicates_and_empty(tmp_path: Path):
     assert report.duplicate_count == 1
     assert report.empty_completion_count == 1
     assert len(report.warnings) >= 2
+
+
+def test_sft_inspector_drift_detection(tmp_path: Path):
+    dataset_file = tmp_path / "test_data.jsonl"
+    dataset_file.write_text(
+        '{"prompt": "Short", "completion": "A"}\n' * 50
+    )
+
+    inspector = SFTInspector()
+    # Baseline with long prompts
+    baseline_seqs = [1000] * 50
+    report = inspector.inspect_file(dataset_file, baseline_seq_lengths=baseline_seqs)
+
+    assert report.drift_alert is True
+    assert report.ks_p_value < 0.05
+

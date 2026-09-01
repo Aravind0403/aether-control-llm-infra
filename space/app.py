@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 import gradio as gr
 import matplotlib.pyplot as plt
 

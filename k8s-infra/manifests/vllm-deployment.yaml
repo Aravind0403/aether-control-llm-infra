@@ -8,6 +8,11 @@ metadata:
     app.kubernetes.io/component: inference-engine
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: vllm-server
@@ -86,6 +91,11 @@ spec:
               memory: 8Gi
               cpu: "2"
           
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 15"]
+
           # Health & Readiness Probes for Zero-Downtime Serving
           readinessProbe:
             httpGet:
@@ -108,10 +118,15 @@ spec:
           volumeMounts:
             - name: model-data-volume
               mountPath: /data
+            - name: model-cache-volume
+              mountPath: /root/.cache/huggingface
 
       volumes:
         - name: model-data-volume
           emptyDir: {}
+        - name: model-cache-volume
+          persistentVolumeClaim:
+            claimName: vllm-model-cache-pvc
 
 ---
 apiVersion: v1

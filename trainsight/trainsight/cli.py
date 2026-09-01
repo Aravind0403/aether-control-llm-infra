@@ -59,13 +59,22 @@ def profile(
         "-k",
         help="Optional HuggingFace model ID for exact model-aligned BPE token counting (e.g. Qwen/Qwen2.5-1.5B-Instruct)",
     ),
+    baseline: Optional[Path] = typer.Option(
+        None,
+        "--baseline",
+        "-b",
+        help="Optional baseline JSON report path for KS-test drift detection",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+    ),
 ):
     """Profile dataset quality, token distributions, and failure risks before training."""
 
     console.print()
     console.print(
         Panel(
-            Text(f"🔍 Profiling dataset: {dataset.name}\nType: {dataset_type.upper()} | Max Target Length: {max_seq_len} tokens" + (f" | Tokenizer: {tokenizer}" if tokenizer else ""), style="bold cyan"),
+            Text(f"🔍 Profiling dataset: {dataset.name}\nType: {dataset_type.upper()} | Max Target Length: {max_seq_len} tokens" + (f" | Tokenizer: {tokenizer}" if tokenizer else "") + (f" | Baseline: {baseline.name}" if baseline else ""), style="bold cyan"),
             title="[bold white]trainsight validator[/bold white]",
             border_style="cyan",
         )
@@ -73,7 +82,17 @@ def profile(
 
     if dataset_type.lower() == "sft":
         inspector = SFTInspector(max_seq_len_threshold=max_seq_len, tokenizer_name=tokenizer)
-        report = inspector.inspect_file(dataset)
+        baseline_seqs = None
+        if baseline:
+            import json
+            try:
+                with open(baseline, "r") as bf:
+                    b_data = json.load(bf)
+                    baseline_seqs = b_data.get("seq_lengths", [])
+            except Exception:
+                pass
+
+        report = inspector.inspect_file(dataset, baseline_seq_lengths=baseline_seqs)
 
         table = Table(title="📊 SFT Dataset Metrics Summary", border_style="dim")
         table.add_column("Metric", style="cyan", no_wrap=True)
@@ -92,6 +111,9 @@ def profile(
         table.add_row("OOM Risk Samples (>2048)", str(report.oom_risk_count), "❌ High Risk" if report.oom_risk_count > 0 else "✅ None")
         table.add_row("Duplicate Prompts", str(report.duplicate_count), "⚠️ Duplicates" if report.duplicate_count > 0 else "✅ Clean")
         table.add_row("Empty Completions", str(report.empty_completion_count), "❌ Corrupt" if report.empty_completion_count > 0 else "✅ Clean")
+        table.add_row("Loss Mask Misalignments", str(report.loss_mask_misaligned_count), "⚠️ Misaligned" if report.loss_mask_misaligned_count > 0 else "✅ Clean")
+        if baseline:
+            table.add_row("KS Test Drift p-value", f"{report.ks_p_value:.4f}", "⚠️ Drift Alert!" if report.drift_alert else "✅ No Drift")
 
         console.print(table)
         console.print()
@@ -125,6 +147,7 @@ def profile(
         table.add_row("Length Bias Ratio (Chosen/Rejected)", f"{report.length_bias_ratio:.2f}", "⚠️ High Bias" if report.length_bias_ratio > 1.8 or report.length_bias_ratio < 0.55 else "✅ Balanced")
         table.add_row("Identical Pairs (Chosen == Rejected)", str(report.identical_pairs_count), "❌ Zero Gradient" if report.identical_pairs_count > 0 else "✅ None")
         table.add_row("Near-Identical Pairs (Sim > 90%)", str(report.near_identical_count), "⚠️ Low Margin" if report.near_identical_count > 0 else "✅ None")
+        table.add_row("Preference Reversals (Chosen < Rejected)", str(report.preference_reversal_count), "❌ Inverted Ratings" if report.preference_reversal_count > 0 else "✅ None")
         table.add_row("Duplicate Prompts", str(report.duplicate_count), "⚠️ Duplicates" if report.duplicate_count > 0 else "✅ Clean")
         table.add_row("Missing Text Rows", str(report.empty_pair_count), "❌ Corrupt" if report.empty_pair_count > 0 else "✅ Clean")
 

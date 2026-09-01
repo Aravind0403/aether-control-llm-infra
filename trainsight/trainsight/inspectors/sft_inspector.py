@@ -17,6 +17,10 @@ class SFTReport(BaseModel):
     oom_risk_count: int
     empty_completion_count: int
     duplicate_count: int
+    loss_mask_misaligned_count: int = 0
+    drift_alert: bool = False
+    ks_p_value: float = 1.0
+    js_divergence: float = 0.0
     predicted_padding_waste_pct: float = 0.0
     phase_quadrant: str = "Clean Execution"
     warnings: List[str] = Field(default_factory=list)
@@ -48,22 +52,40 @@ class SFTInspector:
                 pass
         return max(1, len(text.strip()) // 4)
 
-    def inspect_file(self, file_path: Path) -> SFTReport:
-        """Reads JSONL dataset and computes token distribution, OOM risk, and anomalies."""
+    def _safe_json_loads(self, line: str) -> Optional[Dict[str, Any]]:
+        """Attempts standard json.loads and applies auto-fix recovery for common JSON corruptions."""
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError:
+            cleaned = line.replace("'", '"').rstrip(",")
+            try:
+                return json.loads(cleaned)
+            except json.JSONDecodeError:
+                return None
+
+    def inspect_file(self, file_path: Path, baseline_seq_lengths: Optional[List[int]] = None) -> SFTReport:
+        """Reads JSONL or Parquet dataset and computes token distribution, OOM risk, and anomalies."""
         if not file_path.exists():
             raise FileNotFoundError(f"Dataset file not found: {file_path}")
 
         samples: List[Dict[str, Any]] = []
-        with open(file_path, "r", encoding="utf-8") as f:
-            for line_no, line in enumerate(f, 1):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    data = json.loads(line)
-                    samples.append(data)
-                except json.JSONDecodeError:
-                    continue
+
+        if file_path.suffix == ".parquet":
+            try:
+                import pyarrow.parquet as pq
+                table = pq.read_table(str(file_path))
+                samples = table.to_pylist()
+            except Exception as e:
+                samples = []
+        else:
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    data = self._safe_json_loads(line)
+                    if data:
+                        samples.append(data)
 
         if not samples:
             return SFTReport(
@@ -86,6 +108,7 @@ class SFTInspector:
         seen_prompts = set()
         duplicates = 0
         oom_risk = 0
+        loss_mask_misaligned = 0
 
         for sample in samples:
             # Handle standard keys: 'prompt'/'completion', 'instruction'/'output', 'question'/'answer', or 'messages'
@@ -94,8 +117,21 @@ class SFTInspector:
 
             if isinstance(sample.get("messages"), list):
                 full_text = " ".join([m.get("content", "") for m in sample["messages"]])
+                # Check loss masking alignment: must have at least one assistant completion turn
+                assistant_turns = [m for m in sample["messages"] if m.get("role") == "assistant" and m.get("content")]
+                if not assistant_turns:
+                    loss_mask_misaligned += 1
             else:
                 full_text = f"{prompt_text} {completion_text}"
+                if not completion_text:
+                    loss_mask_misaligned += 1
+
+            # Check explicit labels if present
+            labels = sample.get("labels")
+            if isinstance(labels, list) and labels:
+                # If labels contain no -100 masking tokens, prompt tokens are unmasked (loss computed on user prompt)
+                if -100 not in labels:
+                    loss_mask_misaligned += 1
 
             if not completion_text and not sample.get("messages"):
                 empty_completions += 1
@@ -153,10 +189,30 @@ class SFTInspector:
             warnings.append(f"⚠️ {empty_completions} samples have empty or missing completions.")
             recommendations.append("Filter out entries with empty completions to prevent model learning dummy tokens.")
 
+        if loss_mask_misaligned > 0:
+            warnings.append(f"⚠️ {loss_mask_misaligned} samples have misaligned loss masks (unmasked prompt tokens or missing assistant targets).")
+            recommendations.append("Ensure DataCollatorForCompletionOnlyLM or labels = -100 is applied to prompt turns.")
+
         if duplicates > 0:
             pct = (duplicates / len(samples)) * 100
             warnings.append(f"⚠️ {duplicates} duplicate prompts detected ({pct:.1f}%).")
             recommendations.append("Deduplicate dataset prompts to avoid over-fitting and biased gradient updates.")
+
+        ks_p = 1.0
+        js_div = 0.0
+        drift_alert = False
+
+        if baseline_seq_lengths and len(baseline_seq_lengths) > 0:
+            try:
+                from scipy.stats import ks_2samp
+                stat, p_val = ks_2samp(seq_lengths, baseline_seq_lengths)
+                ks_p = float(p_val)
+                if ks_p < 0.05:
+                    drift_alert = True
+                    warnings.append(f"⚠️ Dataset Drift Detected! (KS Test p-value = {ks_p:.4f} < 0.05). Prompt distribution shifted.")
+                    recommendations.append("Re-profile model max context limits and vLLM chunked prefill parameters.")
+            except ImportError:
+                pass
 
         return SFTReport(
             total_samples=len(samples),
@@ -170,6 +226,10 @@ class SFTInspector:
             oom_risk_count=oom_risk,
             empty_completion_count=empty_completions,
             duplicate_count=duplicates,
+            loss_mask_misaligned_count=loss_mask_misaligned,
+            drift_alert=drift_alert,
+            ks_p_value=ks_p,
+            js_divergence=js_div,
             predicted_padding_waste_pct=predicted_pad_waste,
             phase_quadrant=quadrant,
             warnings=warnings,

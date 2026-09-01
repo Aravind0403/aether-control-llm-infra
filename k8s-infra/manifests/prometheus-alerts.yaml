@@ -1,0 +1,37 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vllm-prometheus-alerts
+  namespace: default
+  labels:
+    role: alert-rules
+spec:
+  groups:
+    - name: vllm_serving_alerts
+      rules:
+        - alert: HighVRAMSaturation
+          expr: vllm:gpu_cache_usage_perc > 0.90
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "vLLM GPU KV-Cache saturation > 90% for 5 minutes"
+            description: "GPU KV-Cache occupancy is at {{ $value | humanizePercentage }}. Risk of preemption storms or PCIe host swapping."
+
+        - alert: HighRequestQueueDepth
+          expr: sum(vllm:num_requests_waiting) > 5
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High vLLM waiting request queue depth"
+            description: "Waiting request queue has {{ $value }} requests queued. KEDA autoscaling recommended."
+
+        - alert: HighPreemptionRate
+          expr: rate(vllm:num_preemptions_total[5m]) > 0.1
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Frequent sequence preemptions detected"
+            description: "vLLM scheduler is preempting running sequences due to KV-cache exhaustion."

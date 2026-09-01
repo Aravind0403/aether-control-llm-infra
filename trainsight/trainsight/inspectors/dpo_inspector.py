@@ -13,6 +13,7 @@ class DPOReport(BaseModel):
     near_identical_count: int
     empty_pair_count: int
     duplicate_count: int
+    preference_reversal_count: int = 0
     length_bias_ratio: float
     warnings: List[str] = Field(default_factory=list)
     recommendations: List[str] = Field(default_factory=list)
@@ -75,6 +76,7 @@ class DPOInspector:
         empty_pair_count = 0
         seen_prompts = set()
         duplicate_count = 0
+        preference_reversal_count = 0
 
         for sample in samples:
             prompt = sample.get("prompt") or ""
@@ -90,6 +92,16 @@ class DPOInspector:
             if not chosen or not rejected:
                 empty_pair_count += 1
                 continue
+
+            # Preference Reversal Check (checking explicitly assigned chosen/rejected quality scores if present)
+            c_score = sample.get("chosen_score") if sample.get("chosen_score") is not None else sample.get("chosen_rating")
+            r_score = sample.get("rejected_score") if sample.get("rejected_score") is not None else sample.get("rejected_rating")
+            if c_score is not None and r_score is not None:
+                try:
+                    if float(c_score) < float(r_score):
+                        preference_reversal_count += 1
+                except (ValueError, TypeError):
+                    pass
 
             chosen_t = self._estimate_tokens(chosen)
             rejected_t = self._estimate_tokens(rejected)
@@ -119,6 +131,10 @@ class DPOInspector:
         warnings = []
         recommendations = []
 
+        if preference_reversal_count > 0:
+            warnings.append(f"⚠️ {preference_reversal_count} preference pairs have REVERSED ratings (chosen_score < rejected_score). DPO will optimize towards inferior responses!")
+            recommendations.append("Swap chosen/rejected responses or filter inverted quality rating rows.")
+
         if identical_count > 0:
             warnings.append(f"⚠️ {identical_count} pairs have IDENTICAL chosen and rejected responses. DPO loss gradient will be 0!")
             recommendations.append("Remove identical chosen/rejected pairs from DPO dataset.")
@@ -147,6 +163,7 @@ class DPOInspector:
             near_identical_count=near_identical_count,
             empty_pair_count=empty_pair_count,
             duplicate_count=duplicate_count,
+            preference_reversal_count=preference_reversal_count,
             length_bias_ratio=length_bias_ratio,
             warnings=warnings,
             recommendations=recommendations,
