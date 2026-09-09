@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-xid-monitor-config
+  namespace: default
+data:
+  gpu-xid-rules.json: |
+    {
+      "plugin": "kmsg",
+      "logPath": "/dev/kmsg",
+      "rules": [
+        {
+          "type": "permanent",
+          "condition": "GPUFatalError",
+          "reason": "NvidiaXidFatalError",
+          "pattern": "NVRM: Xid \\(PCI:[^)]+\\): (31|43|45|61|62|79|92), .*"
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: gpu-xid-kernel-trap
+  namespace: default
+  labels:
+    app.kubernetes.io/name: gpu-xid-kernel-trap
+    app.kubernetes.io/part-of: k8s-rfc-001
+spec:
+  selector:
+    matchLabels:
+      app: gpu-xid-kernel-trap
+  template:
+    metadata:
+      labels:
+        app: gpu-xid-kernel-trap
+    spec:
+      hostNetwork: true
+      hostPID: true
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: xid-kmsg-trap
+          image: registry.k8s.io/node-problem-detector/node-problem-detector:v0.8.19
+          command:
+            - "/node-problem-detector"
+            - "--config.custom-plugin-monitor=/config/gpu-xid-rules.json"
+            - "--logtostderr"
+          securityContext:
+            privileged: true
+          resources:
+            limits:
+              cpu: 50m
+              memory: 64Mi
+            requests:
+              cpu: 20m
+              memory: 32Mi
+          volumeMounts:
+            - name: kmsg
+              mountPath: /dev/kmsg
+              readOnly: true
+            - name: config
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: kmsg
+          hostPath:
+            path: /dev/kmsg
+        - name: config
+          configMap:
+            name: gpu-xid-monitor-config

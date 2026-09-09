@@ -1,13 +1,82 @@
 import re
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Optional
+import sympy
+
+from rlhf_pipeline.rewards.verifier_contract import VerifierContract, VerifierContractError
+
+
+def clean_math_expr(s: str) -> str:
+    """Canonicalizes raw mathematical string into standard algebraic form (RFC-004)."""
+    s = s.strip().lower()
+    # Strip currency and commas
+    s = s.replace("$", "").replace(",", "")
+    # Strip variable equations e.g. 'x = 5' -> '5'
+    s = re.sub(r"^[a-z]\s*=\s*", "", s)
+    # Strip common trailing units
+    s = re.sub(r"\s*(kg|m|cm|meters|dollars|usd)$", "", s)
+    # Convert percentages e.g. '42%' -> '0.42'
+    if s.endswith("%"):
+        num = s[:-1].strip()
+        try:
+            return str(float(num) / 100.0)
+        except Exception:
+            return f"({num})/100"
+    # Convert LaTeX fractions \frac{a}{b} -> (a)/(b)
+    s = re.sub(r"\\frac\{([^}]+)\}\{([^}]+)\}", r"(\1)/(\2)", s)
+    return s.strip()
+
+
+def is_math_equivalent(pred: str, target: str) -> bool:
+    """Evaluates mathematical equivalence using SymPy symbolic simplification (RFC-004)."""
+    cp = clean_math_expr(pred)
+    ct = clean_math_expr(target)
+
+    # 1. Direct string match
+    if cp == ct:
+        return True
+
+    # 2. Direct float match
+    try:
+        if float(cp) == float(ct):
+            return True
+    except ValueError:
+        pass
+
+    # 3. SymPy symbolic equivalence: simplify(p - t) == 0
+    try:
+        p = sympy.sympify(cp)
+        t = sympy.sympify(ct)
+        diff = sympy.simplify(p - t)
+        if diff == 0:
+            return True
+    except Exception:
+        pass
+
+    return False
 
 
 class GRPOReasoningReward:
-    """Rule-based reward evaluator for DeepSeek-R1 style reasoning models (GSM8K/MATH)."""
+    """Rule-based reward evaluator for DeepSeek-R1 style reasoning models (GSM8K/MATH).
+    
+    Hardened with RFC-004:
+    - Zero-Bloat Verifier Contract (<5ms self-test on boot)
+    - SymPy Symbolic Canonicalization
+    """
 
-    def __init__(self, accuracy_weight: float = 1.0, format_weight: float = 0.5):
+    def __init__(
+        self,
+        accuracy_weight: float = 1.0,
+        format_weight: float = 0.5,
+        enforce_contract: bool = True,
+    ):
         self.accuracy_weight = accuracy_weight
         self.format_weight = format_weight
+
+        # Run RFC-004 self-testing contract
+        if enforce_contract:
+            self.contract_ms = VerifierContract.verify(self.evaluate_accuracy_reward, self.accuracy_weight)
+        else:
+            self.contract_ms = 0.0
 
     def extract_reasoning_and_answer(self, completion: str) -> Tuple[str, str, bool]:
         """Extracts text inside <think>...</think> and <answer>...</answer> tags."""
@@ -27,26 +96,16 @@ class GRPOReasoningReward:
         return self.format_weight if format_valid else 0.0
 
     def evaluate_accuracy_reward(self, completion: str, ground_truth: str) -> float:
-        """Returns accuracy reward (+1.0 if extracted answer matches ground truth)."""
+        """Returns accuracy reward (+1.0 if extracted answer matches ground truth via SymPy)."""
         _, extracted_answer, _ = self.extract_reasoning_and_answer(completion)
-        
+
         # Fallback: if no <answer> tag, search for trailing numbers
         if not extracted_answer:
             numbers = re.findall(r"[-+]?\d*\.\d+|\d+", completion)
             extracted_answer = numbers[-1] if numbers else ""
 
-        cleaned_extracted = extracted_answer.strip().lower()
-        cleaned_target = ground_truth.strip().lower()
-
-        if cleaned_extracted == cleaned_target:
+        if is_math_equivalent(extracted_answer, ground_truth):
             return self.accuracy_weight
-
-        # Check numeric equivalence
-        try:
-            if float(cleaned_extracted) == float(cleaned_target):
-                return self.accuracy_weight
-        except ValueError:
-            pass
 
         return 0.0
 

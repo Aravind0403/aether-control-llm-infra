@@ -7,7 +7,17 @@ test:
 	(cd trainsight && pytest)
 	(cd vllm-engine && pytest)
 	(cd rlhf-pipeline && pytest)
+	(cd k8s-infra && PYTHONPATH=. pytest tests)
+	pytest benchmarks/test_platform_benchmarks.py
 	@echo "✅ All unit tests passed!"
+
+benchmark:
+	@echo "🚀 Running Unified Platform Invariant Benchmarks (TrainSight + RLHF + vLLM + K8S)..."
+	python3 -m benchmarks.run_all_benchmarks --mode analytical
+
+benchmark-live:
+	@echo "🌐 Running Live Cluster Benchmark against GKE..."
+	python3 -m benchmarks.run_all_benchmarks --mode live --endpoint $${ENDPOINT:-http://localhost:8000}
 
 profile:
 	@echo "🔍 Running TrainSight dataset quality profiling..."

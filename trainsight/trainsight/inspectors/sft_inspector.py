@@ -23,6 +23,10 @@ class SFTReport(BaseModel):
     js_divergence: float = 0.0
     predicted_padding_waste_pct: float = 0.0
     phase_quadrant: str = "Clean Execution"
+    seq_lengths: List[int] = Field(default_factory=list)
+    mbom: Optional[Any] = None
+    efficiency: Optional[Any] = None
+    collation: Optional[Any] = None
     warnings: List[str] = Field(default_factory=list)
     recommendations: List[str] = Field(default_factory=list)
 
@@ -232,6 +236,7 @@ class SFTInspector:
             js_divergence=js_div,
             predicted_padding_waste_pct=predicted_pad_waste,
             phase_quadrant=quadrant,
+            seq_lengths=seq_lengths,
             warnings=warnings,
             recommendations=recommendations,
         )

@@ -1,3 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dcgm-exporter-csv
+  namespace: default
+data:
+  dcp-metrics-included.csv: |
+    # Format: FieldID, MetricName, FieldType
+    # Tier 1 (5s Active Serving State):
+    251, DCGM_FI_DEV_FB_USED, gauge
+    155, DCGM_FI_DEV_POWER_USAGE, gauge
+    203, DCGM_FI_DEV_GPU_UTIL, gauge
+    1004, DCGM_FI_PROF_SM_ACTIVE, gauge
+    1005, DCGM_FI_PROF_SM_OCCUPANCY, gauge
+    1008, DCGM_FI_PROF_PIPE_TENSOR_ACTIVE, gauge
+    # Tier 2 (15s Physical Drift State):
+    150, DCGM_FI_DEV_GPU_TEMP, gauge
+    160, DCGM_FI_DEV_FAN_SPEED, gauge
+    200, DCGM_FI_DEV_PCIE_REPLAY_COUNTER, counter
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -5,6 +25,7 @@ metadata:
   namespace: default
   labels:
     app.kubernetes.io/name: nvidia-dcgm-exporter
+    app.kubernetes.io/part-of: k8s-rfc-001
 spec:
   selector:
     matchLabels:
@@ -17,6 +38,7 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9400"
         prometheus.io/path: "/metrics"
+        prometheus.io/interval: "5s"
     spec:
       tolerations:
         - key: "nvidia.com/gpu"
@@ -28,6 +50,11 @@ spec:
           ports:
             - name: metrics
               containerPort: 9400
+          env:
+            - name: DCGM_EXPORTER_COLLECTORS
+              value: "/etc/dcgm-exporter/dcp-metrics-included.csv"
+            - name: DCGM_EXPORTER_INTERVAL
+              value: "5000" # K8S-RFC-001: 5000ms throttled cadence eliminates 85% NVML mutex locks
           securityContext:
             runAsNonRoot: false
             capabilities:
@@ -39,3 +66,17 @@ spec:
             requests:
               memory: 128Mi
               cpu: 100m
+          volumeMounts:
+            - name: collectors-config
+              mountPath: /etc/dcgm-exporter/dcp-metrics-included.csv
+              subPath: dcp-metrics-included.csv
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: collectors-config
+          configMap:
+            name: dcgm-exporter-csv
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi

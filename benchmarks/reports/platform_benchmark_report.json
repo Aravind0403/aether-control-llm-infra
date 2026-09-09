@@ -1,0 +1,120 @@
+{
+  "timestamp": 1788952527.5568352,
+  "mode": "analytical",
+  "live_endpoint": null,
+  "stages": {
+    "stage_1_trainsight": {
+      "meta_probe": {
+        "probe_latency_ms": 3.621,
+        "probed_layer_mb": 89.26,
+        "total_static_gb": 3.31,
+        "sla_target_ms": 15.0,
+        "status": "PASS"
+      },
+      "signature_cache": {
+        "hash_latency_ms": 0.124,
+        "sla_target_ms": 10.0,
+        "status": "PASS"
+      },
+      "bin_packing": {
+        "total_sequences": 10,
+        "num_batches": 5,
+        "waste_reduction_pct": 40.2,
+        "throughput_boost_pct": 81.0,
+        "status": "PASS"
+      }
+    },
+    "stage_2_rlhf": {
+      "verifier_contract": {
+        "pairs_tested": 15,
+        "latency_ms": 3.59,
+        "status": "PASS"
+      },
+      "radix_kv_deduplication": {
+        "prompt_redundancy_eliminated_pct": 87.5,
+        "kv_cache_saved_mb": 2240.0,
+        "token_reduction_pct": 43.75,
+        "status": "PASS"
+      },
+      "vram_time_multiplexing": {
+        "rollout_peak_vram_gb": 23.3,
+        "rollout_headroom_pct": 70.9,
+        "train_peak_vram_gb": 52.2,
+        "train_headroom_pct": 34.8,
+        "status": "PASS"
+      },
+      "consensus_jury": {
+        "raw_mean_score": 0.5833,
+        "uncertainty_penalty": 0.5639,
+        "penalized_final_reward": 0.0195,
+        "is_hacking_suppressed": true,
+        "status": "PASS"
+      },
+      "fluency_barrier": {
+        "keyword_soup_ppl": 74.0,
+        "fluency_penalty": 2.0,
+        "final_reward": -1.0,
+        "status": "PASS"
+      }
+    },
+    "stage_3_vllm": {
+      "codel_admission": {
+        "nominal_ttft_status": 200,
+        "saturated_action": "HTTP 429 (QueueSaturationDelayExceeded)",
+        "status": "PASS"
+      },
+      "model_cascade": {
+        "simple_query_target": "7b_spot_fast_lane",
+        "simple_query_latency_ms": 35.0,
+        "complex_query_target": "70b_primary_deep_lane",
+        "status": "PASS"
+      },
+      "two_tier_radix_security": {
+        "pinned_system_blocks": 120,
+        "attacker_allocated_blocks": 150,
+        "attacker_quota_ceiling": 150,
+        "status": "PASS"
+      },
+      "idle_residual_watchdog": {
+        "clean_probe_status": 200,
+        "leak_probe_status": 503,
+        "status": "PASS"
+      },
+      "semantic_oracle": {
+        "anti_gaming_target": "70b_deep_lane",
+        "oracle_latency_ms": 0.014,
+        "status": "PASS"
+      },
+      "spot_handoff_timeline": {
+        "preemption_deadline_s": 30.0,
+        "replacement_ready_s": 22.5,
+        "dropped_requests": 0,
+        "status": "PASS"
+      }
+    },
+    "stage_4_k8s": {
+      "dcgm_mutex_contention": {
+        "naive_500ms_scrapes_sec": 80000.0,
+        "naive_500ms_p99_ttft_ms": 350.0,
+        "tiered_5000ms_scrapes_sec": 1120.0,
+        "tiered_5000ms_p99_ttft_ms": 45.0,
+        "driver_lock_reduction_pct": 98.6,
+        "status": "PASS"
+      },
+      "shared_memory_cache": {
+        "storage_medium": "/dev/shm",
+        "read_latency_ms": 0.0006,
+        "num_metrics_returned": 9,
+        "is_driver_mutex_acquired": false,
+        "status": "PASS"
+      },
+      "kernel_xid_trap": {
+        "xid_code": 45,
+        "applied_node_taint": "node.kubernetes.io/unschedulable:NoSchedule",
+        "quarantine_latency_ms": 0.003,
+        "zero_polling_overhead": true,
+        "status": "PASS"
+      }
+    }
+  }
+}
