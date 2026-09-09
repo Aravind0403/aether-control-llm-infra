@@ -75,7 +75,16 @@ def run_trl_grpo_training(
         logging_steps=5,
         fp16=torch.cuda.is_available() and not torch.cuda.is_bf16_supported(),
         bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
+        gradient_checkpointing=True,
         report_to="none"
+    )
+
+    from peft import LoraConfig
+    peft_config = LoraConfig(
+        r=16,
+        lora_alpha=32,
+        target_modules=["q_proj", "v_proj"],
+        task_type="CAUSAL_LM"
     )
 
     # 3. Instantiate GRPOTrainer with custom reward functions
@@ -83,7 +92,8 @@ def run_trl_grpo_training(
         model=model_name,
         reward_funcs=[reward_function_format, reward_function_accuracy],
         args=training_args,
-        train_dataset=dataset
+        train_dataset=dataset,
+        peft_config=peft_config
     )
 
     print("✨ Starting GRPOTrainer model weight updates...")
