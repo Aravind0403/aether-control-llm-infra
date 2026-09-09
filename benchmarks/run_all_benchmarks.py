@@ -483,11 +483,13 @@ Across all four architectural lifecycle stages, all SLAs and production invarian
 
 def main():
     parser = argparse.ArgumentParser(description="Platform E2E System Benchmark Suite")
-    parser.add_argument("--mode", choices=["analytical", "live"], default="analytical", help="Execution mode (analytical or live cluster)")
-    parser.add_argument("--endpoint", default=None, help="Live HTTP inference endpoint (e.g. http://34.x.x.x:8000)")
+    parser.add_argument("--mode", choices=["analytical", "live"], default=None, help="Execution mode (analytical or live cluster)")
+    parser.add_argument("--endpoint", "--live-vllm-endpoint", dest="endpoint", default=None, help="Live HTTP inference endpoint (e.g. http://localhost:8000)")
     args = parser.parse_args()
 
-    suite = PlatformBenchmarkSuite(mode=args.mode, live_endpoint=args.endpoint)
+    # Automatically enable live mode if endpoint is provided
+    mode = args.mode or ("live" if args.endpoint else "analytical")
+    suite = PlatformBenchmarkSuite(mode=mode, live_endpoint=args.endpoint)
     suite.run_all()
 
 
