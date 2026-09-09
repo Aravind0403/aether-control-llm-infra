@@ -23,26 +23,19 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest numpy pydantic pyyaml typer rich requests
+          pip install pytest numpy pydantic pyyaml typer rich requests sympy
+          pip install -e trainsight/ -e vllm-engine/ -e rlhf-pipeline/
 
-      - name: Test & Validate trainsight (Shift-Left Pre-Flight Check)
+      - name: Pre-flight Dataset Quality Inspections (Shift-Left Validation)
         run: |
-          cd trainsight
-          pip install -e .
-          pytest
-          # Shift-Left CI validation: Fail CI build if dataset quality checks fail (--strict)
-          trainsight profile --dataset sample_data/sample_sft.jsonl --type sft --strict
-          trainsight profile --dataset sample_data/sample_dpo.jsonl --type dpo --strict
-          trainsight profile --dataset sample_data/sample_gsm8k.jsonl --type sft --strict
+          trainsight profile --dataset trainsight/sample_data/sample_sft.jsonl --type sft --strict
+          trainsight profile --dataset trainsight/sample_data/sample_dpo.jsonl --type dpo --strict
+          trainsight profile --dataset trainsight/sample_data/sample_gsm8k.jsonl --type sft --strict
 
-      - name: Test vllm-engine
+      - name: Run Full 64-Test Suite Across All Modules
         run: |
-          cd vllm-engine
-          pip install -e .
-          pytest
+          make test
 
-      - name: Test rlhf-pipeline
+      - name: Execute 4-Stage Platform Invariant Benchmark Suite
         run: |
-          cd rlhf-pipeline
-          pip install -e .
-          pytest
+          make benchmark
