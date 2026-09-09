@@ -75,7 +75,6 @@ def run_trl_grpo_training(
         logging_steps=5,
         fp16=torch.cuda.is_available() and not torch.cuda.is_bf16_supported(),
         bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
-        gradient_checkpointing=True,
         report_to="none"
     )
 
