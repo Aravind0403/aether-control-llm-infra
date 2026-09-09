@@ -202,14 +202,6 @@ All model weights and dataset snapshots are published to the HuggingFace Hub:
 
 ---
 
-## 💼 Quantified Resume Highlights (XYZ Formula)
-
-* **Data Engineering & Safety:** Engineered a pre-flight data validation InitContainer (`trainsight`), reducing wasted GPU compute hours by catching schema drift, empty completions, and sequence-length anomalies prior to Kubernetes pod scheduling.
-* **Post-Training Alignment:** Architected an end-to-end GRPO RLHF pipeline with a no-critic relative advantage engine using HuggingFace `trl.GRPOTrainer`, optimizing VRAM utilization by 50% through Critic network elimination and boosting GSM8K accuracy from 42% to 70%.
-* **Serving & Observability:** Deployed and tuned a vLLM inference engine on real GPU silicon, utilizing Chunked Prefill and PagedAttention to achieve **1,141.41 tokens/s** with sub-25ms $P_{50}$ TTFT under concurrent load.
-* **Kubernetes Infrastructure Governance:** Engineered a tiered DCGM telemetry governor and zero-polling `/dev/kmsg` XID kernel trap, eliminating **98.6% of driver mutex lock acquisitions** and isolating failing nodes in under 0.01ms.
-
----
-
 ## 📜 License
 MIT License
+

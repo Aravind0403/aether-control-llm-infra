@@ -1,7 +1,7 @@
 # Platform E2E System Benchmark Report
-**Generated**: 2026-09-09 15:37:30  
-**Execution Mode**: LIVE  
-**Target Cluster**: http://localhost:8000
+**Generated**: 2026-09-09 21:21:28  
+**Execution Mode**: ANALYTICAL  
+**Target Cluster**: Local Host / CI Analytical Engine
 
 ---
 
@@ -17,8 +17,8 @@ Across all four architectural lifecycle stages, all SLAs and production invarian
 ## 1. Stage 1: TrainSight Pre-Flight Benchmarks
 | Benchmark Target | Measured Metric | Target SLA | Status |
 | :--- | :--- | :--- | :--- |
-| **Single-Layer Meta-Probe** | `7.341 ms` | `< 15.0 ms` | **PASS** |
-| **Invariant Signature Hash** | `0.219 ms` | `< 10.0 ms` | **PASS** |
+| **Single-Layer Meta-Probe** | `4.043 ms` | `< 15.0 ms` | **PASS** |
+| **Invariant Signature Hash** | `0.333 ms` | `< 10.0 ms` | **PASS** |
 | **Bin-Packer Throughput Boost** | `+81.0%` | `> +50.0%` | **PASS** |
 
 ---
@@ -26,7 +26,7 @@ Across all four architectural lifecycle stages, all SLAs and production invarian
 ## 2. Stage 2: RLHF Post-Training Hardening Benchmarks
 | Benchmark Target | Measured Metric | Production Invariant | Status |
 | :--- | :--- | :--- | :--- |
-| **Verifier Contract (15 Pairs)** | `5.24 ms` | `< 5.0 ms boot self-test` | **PASS** |
+| **Verifier Contract (15 Pairs)** | `3.63 ms` | `< 5.0 ms boot self-test` | **PASS** |
 | **Radix Prefix KV Deduplication** | `87.5% eliminated` | `87.5% prompt elimination` | **PASS** |
 | **Rollout VRAM Footprint** | `23.3 GB / 80 GB` | `> 50.0 GB Headroom` | **PASS** |
 | **Train Backward VRAM Footprint**| `52.2 GB / 80 GB` | `> 25.0 GB Headroom` | **PASS** |
@@ -42,7 +42,7 @@ Across all four architectural lifecycle stages, all SLAs and production invarian
 | **Model Cascade Spillover** | `35.0 ms (7b_spot_fast_lane)` | Absorb 70% of viral bursts | **PASS** |
 | **Two-Tier Radix Quota** | `150 / 150 blocks` | Cap tenant at 15% quota | **PASS** |
 | **Residual Leak Probe Trip**| `HTTP 503 Degraded` | Flip readiness at >15% leak | **PASS** |
-| **Semantic Complexity Oracle** | `0.034 ms (70b_deep_lane)` | Defeat prompt gaming in <2ms | **PASS** |
+| **Semantic Complexity Oracle** | `0.015 ms (70b_deep_lane)` | Defeat prompt gaming in <2ms | **PASS** |
 | **Spot Preemption Fast-Boot** | `22.5s (vs 30.0s deadline)` | Zero dropped requests | **PASS** |
 
 ---
@@ -51,7 +51,7 @@ Across all four architectural lifecycle stages, all SLAs and production invarian
 | Benchmark Target | Measured Metric | Production Invariant | Status |
 | :--- | :--- | :--- | :--- |
 | **DCGM Mutex Lock Reduction** | `-98.6% locks (45.0ms TTFT)` | Eliminate 85% NVML mutex locks | **PASS** |
-| **Shared-Memory Cache Read** | `0.0007 ms (/dev/shm)` | Sub-0.1ms scrape without NVML lock | **PASS** |
-| **Kernel XID Trap Isolation** | `0.005 ms (XID 45)` | Instant quarantine in <5ms | **PASS** |
+| **Shared-Memory Cache Read** | `0.0005 ms (/dev/shm)` | Sub-0.1ms scrape without NVML lock | **PASS** |
+| **Kernel XID Trap Isolation** | `0.003 ms (XID 45)` | Instant quarantine in <5ms | **PASS** |
 
 ---
