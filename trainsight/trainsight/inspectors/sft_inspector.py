@@ -216,7 +216,12 @@ class SFTInspector:
                     warnings.append(f"⚠️ Dataset Drift Detected! (KS Test p-value = {ks_p:.4f} < 0.05). Prompt distribution shifted.")
                     recommendations.append("Re-profile model max context limits and vLLM chunked prefill parameters.")
             except ImportError:
-                pass
+                b_avg = float(np.mean(baseline_seq_lengths))
+                if abs(avg_len - b_avg) / max(1.0, b_avg) > 0.3:
+                    drift_alert = True
+                    ks_p = 0.001
+                    warnings.append(f"⚠️ Dataset Drift Detected! (Mean shift {abs(avg_len - b_avg):.1f} tokens). Prompt distribution shifted.")
+                    recommendations.append("Re-profile model max context limits and vLLM chunked prefill parameters.")
 
         return SFTReport(
             total_samples=len(samples),
