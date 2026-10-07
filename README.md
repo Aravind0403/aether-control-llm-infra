@@ -22,14 +22,14 @@ flowchart TD
     subgraph Stage1["1. Data Engineering & Pre-Flight Guard (trainsight)"]
         A[Raw JSONL / Parquet Stream] --> B{"TrainSight Meta-Probe<br/>& Signature Check"}
         B -->|"❌ OOM Risk / σ/μ > 0.75"| C["HALT: Exit Code 1<br/>(Abort K8s Pod Boot)"]
-        B -->|"✅ Kernel Sanity (<15ms)"| D["Greedy Bin-Packer<br/>(+81.0% Throughput)"]
+        B -->|"✅ Kernel Sanity (<15ms SLA)"| D["Greedy Bin-Packer<br/>(-40.2pt Padding Waste)"]
     end
 
     subgraph Stage2["2. Post-Training & Reasoning Alignment (rlhf-pipeline)"]
         D --> E["DeepSeek-R1 Style GRPOTrainer<br/>(PEFT LoRA r=16, α=32)"]
         E --> F{"Rule-Based Verifiers<br/>(Format + Accuracy)"}
         F -->|"❌ Reward Hacking / Repetition"| G["Bayesian Penalty Engine<br/>(-0.56 Penalty)"]
-        F -->|"✅ CoT Tag & Math Ground Truth"| H["Group Relative Advantage Update<br/>(Accuracy 20% ──► 70%)"]
+        F -->|"✅ CoT Tag & Math Ground Truth"| H["Group Relative Advantage Update<br/>(Batch Accuracy 20% ──► 70%)"]
     end
 
     subgraph Stage3["3. High-Throughput Inference Serving (vllm-engine)"]
@@ -44,9 +44,9 @@ flowchart TD
     subgraph Stage4["4. Kubernetes Telemetry & Fault Isolation (k8s-infra)"]
         M --> O["GKE / Cloud GPU Nodes"]
         O --> P{"Tiered DCGM Poller"}
-        P -->|"❌ Scrape Storm"| Q["Decouple 5s/15s Scrapes<br/>(-98.6% Driver Mutex Contention)"]
+        P -->|"❌ Scrape Storm"| Q["Decouple 5s/15s Scrapes<br/>(-98.6% NVML Scrapes [Model])"]
         O --> R{"Zero-Polling /dev/kmsg Trap"}
-        R -->|"❌ Critical XID 31/43/45/79"| S["Instant Node Taint / Quarantine<br/>(< 0.01ms Zero Driver Overhead)"]
+        R -->|"❌ Critical XID 31/43/45/79"| S["Instant Node Taint / Quarantine<br/>(< 0.01ms /dev/kmsg Trap)"]
     end
 ```
 
@@ -56,9 +56,9 @@ flowchart TD
 
 | Audience | What They Get |
 | :--- | :--- |
-| **ML Engineers** | Production-grade vLLM serving pushing **1,141.41 tokens/s** with PagedAttention and Chunked Prefill. |
-| **RL / AI Researchers** | DeepSeek-R1 style GRPOTrainer with deterministic math/format verifiers achieving **70% GSM8K accuracy**. |
-| **Infrastructure & Platform Teams** | DCGM telemetry governance with **98.6% less driver mutex lock contention** and zero-polling kernel XID traps. |
+| **ML Engineers** | Production-grade vLLM serving pushing **1,141.41 tokens/s** with PagedAttention and Chunked Prefill on RTX 4090. |
+| **RL / AI Researchers** | DeepSeek-R1 style GRPOTrainer with deterministic math/format verifiers achieving **70% GSM8K training-batch accuracy** ($n=40$). |
+| **Infrastructure & Platform Teams** | DCGM telemetry governor decoupling query frequencies to yield **98.6% less NVML driver queries** (analytical model) and zero-polling kernel XID traps. |
 | **FinOps Teams** | **$0.08 per 1M tokens** serving economics (~10x cheaper than commercial closed APIs) on spot/rental GPUs. |
 | **Open Source Developers** | **64/64 CPU-compatible unit tests**, 4-stage analytical benchmarks, and zero-hardware barrier to entry. |
 
@@ -69,19 +69,37 @@ flowchart TD
 | Capability | AetherControl Platform | Vanilla vLLM Baseline | Production Impact |
 | :--- | :--- | :--- | :--- |
 | **Pre-Flight OOM Prevention** | ✅ **TrainSight Meta-Probe** (7.34ms probe, σ/μ checks) | ❌ None (OOM crashes pod mid-job) | Zero wasted GPU dollars on corrupt tensors |
-| **Post-Training Alignment** | ✅ **Integrated GRPO Pipeline** (70% GSM8K on 24GB GPUs) | ❌ None (Requires separate disparate framework) | Unified codebase from training to serving |
-| **Telemetry Mutex Contention**| ✅ **Tiered DCGM Governor** (5s/15s + `/dev/shm` cache) | ⚠️ 500ms raw NVML scrape storms | Locks P99 TTFT to 45ms under high scrape loads |
-| **Hardware Fault Isolation** | ✅ **`/dev/kmsg` Kernel Trap** (XID taint in <0.01ms) | ❌ None (Broken pods stay in routing pool) | Zero black-hole traffic routing to failed GPUs |
+| **Post-Training Alignment** | ✅ **Integrated GRPO Pipeline** (70% batch accuracy on 24GB GPUs) | ❌ None (Requires separate disparate framework) | Unified codebase from training to serving |
+| **Telemetry Mutex Contention**| ✅ **Tiered DCGM Governor** (5s/15s + `/dev/shm` cache) | ⚠️ 500ms raw NVML scrape storms | Analytical model: -98.6% NVML queries, locks P99 TTFT ceiling to 45ms |
+| **Hardware Fault Isolation** | ✅ **`/dev/kmsg` Kernel Trap** (XID trap in <0.01ms in-memory) | ❌ None (Broken pods stay in routing pool) | Zero black-hole traffic routing to failed GPUs |
 | **Burst Protection** | ✅ **CoDel Load Shedder & Model Cascading** (7B fast-lane) | ⚠️ Unbounded queues degrade all users | Graceful 429 shedding vs. cluster-wide cascading crash |
 | **Serving Economics** | ✅ **$0.08 – $0.10 per 1M tokens** (RTX 4090 / L4) | ❌ ~$0.50 – $1.50 per 1M tokens | **10x cheaper than commercial inference APIs** |
 
 ---
 
-## 📊 Live Silicon Telemetry Scorecard (RTX 4090 Hardware Verified)
+## 📊 Live Silicon Telemetry Scorecard & Metric Provenance Registry
 
-Empirical telemetry measured on live silicon (**NVIDIA GeForce RTX 4090, 24GB VRAM**, CUDA 12.8, PyTorch 2.5.1, vLLM 0.7.2):
+Every latency, throughput, and efficiency metric in this repository is mapped to an explicit classification and reproduction path. See [`benchmarks/reproduce.md`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/benchmarks/reproduce.md) for full hardware reproduction scripts, commands, and raw telemetry logs.
 
-### 1. High-Performance Serving SLA (`vllm-bench`)
+### 1. Metric Classification & Provenance Registry
+
+| Claimed Metric | Classification | Implementation & Methodology | Source / Reproduction Reference |
+| :--- | :--- | :--- | :--- |
+| **1,141.41 tokens/s** | `[HARDWARE-MEASURED]` | Stock vLLM 0.7.2 benchmarked on RTX 4090 (`Qwen/Qwen2.5-1.5B-Instruct`, concurrency 8, 50 requests). Control plane was not inline during this raw engine run. | [`live_silicon_execution.md`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/benchmarks/reports/live_silicon_execution.md) · [`reproduce.md`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/benchmarks/reproduce.md#1-live-stock-vllm-inference-sla-benchmark) |
+| **22.1 ms P50 TTFT** | `[HARDWARE-MEASURED]` | FlashAttention-2 prefill latency on RTX 4090 (vLLM 0.7.2, chunked prefill 2048). P99 (110.3ms) measured over 50 requests. | [`live_silicon_execution.md`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/benchmarks/reports/live_silicon_execution.md) · [`reproduce.md`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/benchmarks/reproduce.md#1-live-stock-vllm-inference-sla-benchmark) |
+| **6.5 ms P50 TPOT** | `[HARDWARE-MEASURED]` | Autoregressive token decode latency bounded by RTX 4090 HBM bandwidth (886.1 GB/s). | [`live_silicon_execution.md`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/benchmarks/reports/live_silicon_execution.md) · [`reproduce.md`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/benchmarks/reproduce.md#1-live-stock-vllm-inference-sla-benchmark) |
+| **GRPO Reward (0.325 ──► 0.850)** | `[TRAINING-BATCH]` | 10-step HuggingFace TRL `GRPOTrainer` with PEFT LoRA ($r=16, \alpha=32$). Measures batch reward across 4 prompts/step ($n=40$ completions total). **Not a held-out test evaluation.** | [`grpo_trl_trainer.py`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/rlhf-pipeline/rlhf_pipeline/grpo_trl_trainer.py) · [`reproduce.md`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/benchmarks/reproduce.md#2-live-huggingface-trl-grpo-training-loop-smoke-test) |
+| **−98.6% Driver Mutex Contention** | `[ANALYTICAL MODEL]` | $\text{Reduction} = 1.0 - \frac{1,120\text{ queries/s}}{80,000\text{ queries/s}} = 98.6\%$. Models 800 theoretical GPUs comparing 500ms flat scraping vs tiered 5s/15s polling. No physical driver ioctl measured. | [`telemetry_governor.py`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/k8s_infra/telemetry_governor.py#L46-L82) · [`reproduce.md`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/benchmarks/reproduce.md#2-complete-metric-provenance-registry) |
+| **45.0 ms P99 TTFT Lock** | `[ANALYTICAL MODEL]` | Formulaic queue scaling function estimating latency ceiling when driver lock contention is eliminated. | [`telemetry_governor.py`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/k8s_infra/telemetry_governor.py#L83-L97) |
+| **0.005 ms XID Trap Isolation** | `[MICRO-BENCHMARK]` | Python `re.search` execution time on a mock `/dev/kmsg` string. End-to-end K8s API patch + taint takes ~200ms–2s in production. | [`telemetry_governor.py`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/k8s_infra/telemetry_governor.py#L140-L170) |
+| **0.0007 ms /dev/shm Scrape Read** | `[MICRO-BENCHMARK]` | Python in-memory dictionary lookup time reading pre-parsed metrics from RAM. | [`telemetry_governor.py`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/k8s_infra/telemetry_governor.py#L105-L135) |
+| **40.2pt Padding Token Reduction** | `[SYNTHETIC MODEL]` | Heuristic padding reduction on synthetic set `[120, 240, 800, 1500, 300, 950, 450, 1800, 210, 650]`. Waste drops from 50.4% to 10.2% vs random order (+81.0% relative token efficiency). | [`bin_packer.py`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/trainsight/trainsight/remediators/bin_packer.py#L50-L74) |
+| **Single-Layer Meta-Probe (7.34 ms)**| `[HARDWARE-MEASURED]` | Single-layer tensor instantiation on `torch.device('meta')` executed on RTX 4090 host (4.04ms on Apple Silicon MPS). Bound by `META_PROBE_SLA_MS = 15.0`. | [`meta_probe.py`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/trainsight/trainsight/profilers/meta_probe.py) |
+
+### 2. High-Performance Serving SLA (`vllm-bench`)
+* **Environment**: Bare-metal Vast.ai `#50399758` (1x NVIDIA GeForce RTX 4090 24GB VRAM, AMD EPYC 7C13, CUDA 12.8, Driver 570.211.01).
+* **Workload**: Stock vLLM 0.7.2, `Qwen/Qwen2.5-1.5B-Instruct`, 50 requests, concurrency 8, max tokens 128 (control plane proxy was not inline during raw engine run).
+
 | Metric | Measured Silicon Telemetry | Production Target / SLA | Status |
 | :--- | :--- | :--- | :--- |
 | **Output Token Throughput** | **1,141.41 tokens/s** | > 800 tokens/s | ✅ **PASS** |
@@ -93,27 +111,17 @@ Empirical telemetry measured on live silicon (**NVIDIA GeForce RTX 4090, 24GB VR
 | **E2E Request Latency P99** | **0.92 s** | < 2.0 s | ✅ **PASS** |
 | **Serving Reliability** | **50 / 50 (100.0%)** | 100% Zero-Drop | ✅ **PASS** |
 | **Hardware Cost** | **$0.30 – $0.35 / hour** | Sub-$0.50 / hr | ✅ **PASS** |
-| **Cost per 1M Tokens** | **$0.08 – $0.10** | < $0.50 / 1M | ✅ **10x Cheaper** |
+| **Cost per 1M Tokens** | **$0.08 – $0.10** | < $0.50 / 1M | ✅ **10x Cheaper than Closed APIs** |
 
-### 2. Live HuggingFace TRL GRPO Post-Training Alignment (GSM8K)
-| Optimization Step | Combined Reward | Math Accuracy | Format Compliance (`<think>`) | Training Loss |
+### 3. Live HuggingFace TRL GRPO Post-Training Alignment (GSM8K)
+* **Workload**: 10-step distributed GRPO fine-tuning loop with PEFT LoRA ($r=16, \alpha=32$) on `Qwen2.5-1.5B-Instruct`.
+* **Scope**: Evaluates batch reward progress across 4 training batch prompts per step ($n=40$ completions total). **Not an evaluation on the 1,319 GSM8K held-out test split.**
+
+| Optimization Step | Combined Batch Reward | Training Batch Math Accuracy | Format Compliance (`<think>`) | Training Loss |
 | :--- | :--- | :--- | :--- | :--- |
 | **Step 0 (Base Model)** | 0.000 | 42.0% | 0.0% (Unstructured) | 1.1934 |
 | **Step 5 (Mid-Training)** | 0.325 | 20.0% | 0.125 | 0.0002 |
 | **Step 10 (Final Policy)**| **0.850 (+161%)** | **70.0% (+250%)** | **0.150 (Strict XML)** | **0.0004** |
-
----
-
-## 📈 Industry Benchmark Comparison
-
-| Metric | AetherControl Platform | Standard vLLM Baseline | Typical Cloud APIs (Closed) | Measurable Gain |
-| :--- | :--- | :--- | :--- | :--- |
-| **Output Throughput** | **1,141 tok/s** | 500 – 800 tok/s | N/A (Shared Throttle) | **1.4x – 2.3x Boost** |
-| **TTFT (Prefill P50)** | **22.1 ms** | 50 – 100 ms | 350 – 800 ms | **2x – 4x Faster** |
-| **TPOT (Decode P50)** | **6.5 ms/tok** | 10 – 15 ms/tok | 20 – 40 ms/tok | **1.5x – 2x Faster** |
-| **Driver Mutex Contention** | **-98.6%** | High (500ms scrape storms) | Opaque | **P99 TTFT locked at 45ms** |
-| **Pre-Flight OOM Prevention** | **100% Guaranteed** | 0% (Silent crash) | N/A | **Infinite** |
-| **Cost per 1M Tokens** | **$0.08** | ~$0.30 – $0.50 | $1.00 – $5.00 | **4x – 50x Cheaper** |
 
 ---
 
@@ -123,7 +131,7 @@ Empirical telemetry measured on live silicon (**NVIDIA GeForce RTX 4090, 24GB VR
 | :--- | :--- | :--- | :--- | :--- |
 | **ADR-001** | **GRPO over PPO** | Eliminate Critic/Value neural network entirely | Saves **50% VRAM**, doubling batch generation throughput | ✅ **Ratified** |
 | **ADR-002** | **PagedAttention** | Dynamic OS-style virtual memory paging for KV cache | Eliminates memory fragmentation; enables **4x concurrency** | ✅ **Ratified** |
-| **ADR-003** | **Tiered DCGM Polling** | Decouple 5s serving metrics from 15s thermal metrics | Slashes driver mutex locks by **98.6%**, preserving 45ms TTFT | ✅ **Ratified** |
+| **ADR-003** | **Tiered DCGM Polling** | Decouple 5s serving metrics from 15s thermal metrics | Analytical model: cuts NVML queries by **98.6%** (1,120 vs 80,000 queries/s on 800 GPUs), modeling a 45ms TTFT ceiling | ✅ **Ratified** |
 | **ADR-004** | **Chunked Prefill** | Chunk large prompts into 2048-token batches | Prevents head-of-line blocking for decode requests | ✅ **Ratified** |
 | **ADR-005** | **Model Cascading** | Auto-route viral burst traffic to 7B/1.5B fast-lane | Absorbs **70% of viral spikes** in 35ms without degrading deep lanes | ✅ **Ratified** |
 
@@ -175,7 +183,7 @@ python3 demo/run_gsm8k_grpo_mps.py --samples 1000 --steps 50
 | **Natalia's Clips (48)** | `Natalia sold 60 clips.` ❌ *(Incorrect, no reasoning)* | `<think>`<br>1. April sales = $48$ clips.<br>2. May sales = $48 / 2 = 24$ clips.<br>3. Total sales = $48 + 24 = 72$ clips.<br>`</think>`<br>`<answer>72</answer>` ✨ *(Correct CoT)* |
 | **Reasoning Structure** | ❌ None (Direct unstructured text) | ✅ Step-by-step CoT inside `<think>` |
 | **Format Tag Compliance** | **0.0%** | **100.0%** |
-| **Math Accuracy (GSM8K)** | **42.0%** | **70.0% (+66.7% Gain on Live Silicon)** |
+| **Math Accuracy (GSM8K Training Batch)** | **42.0%** | **70.0% (Prompt batch accuracy, $n=40$; not held-out test split)** |
 | **Automated Verifier Score**| **0.0 / 1.5** | **1.5 / 1.5 (PERFECT SCORE)** |
 
 ---

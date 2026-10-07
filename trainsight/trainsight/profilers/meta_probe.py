@@ -19,6 +19,9 @@ class MetaProbeResult(BaseModel):
     warning: Optional[str] = None
 
 
+META_PROBE_SLA_MS: float = 15.0
+
+
 class SingleLayerMetaProbe:
     """Zero-GPU Single-Layer Homogeneous Prober.
     

@@ -1,5 +1,7 @@
 .PHONY: all test profile k8s-dev cloud-up cloud-down clean
 
+export KMP_DUPLICATE_LIB_OK=TRUE
+
 all: test profile
 
 test:

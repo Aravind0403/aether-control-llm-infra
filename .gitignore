@@ -7,3 +7,10 @@
 # Internal documentation & Q&A notes (kept local, excluded from public GitHub)
 Doc_Content/
 space/Doc_Content/
+
+# Auto-generated runtime artifacts & training checkpoints
+checkpoints/
+**/checkpoints/
+results/
+**/results/
+

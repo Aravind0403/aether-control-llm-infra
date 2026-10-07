@@ -12,6 +12,7 @@
 Executed distributed Group Relative Policy Optimization on **Qwen2.5-1.5B-Instruct** using the GSM8K mathematical reasoning dataset:
 - **Optimization Strategy**: PEFT LoRA ($r=16, \alpha=32$) on attention projections (`q_proj`, `v_proj`).
 - **Batching**: Global train batch size = 4, matching 4 generations per prompt ($G=4$).
+- **Scope & Validation**: Evaluates training-batch reward progression across 10 optimization steps ($n=40$ completions total across 4 prompts/step). **This is a training loop smoke test, not an evaluation on the held-out GSM8K 1,319 test split.**
 - **Reward Functions**:
   1. `reward_function_format`: XML tag compliance verification (`<think>...</think><answer>...</answer>`).
   2. `reward_function_accuracy`: Numerical ground-truth equivalence extraction.
@@ -19,8 +20,8 @@ Executed distributed Group Relative Policy Optimization on **Qwen2.5-1.5B-Instru
 ### Convergence Progress:
 | Metric | Step 5 | Step 10 | Delta / Trajectory |
 | :--- | :--- | :--- | :--- |
-| **Combined Reward** | `0.3250` | **`0.8500`** | **+161.5% boost** |
-| **Accuracy Reward** | `0.2000` | **`0.7000`** | **+250.0% jump** |
+| **Combined Batch Reward** | `0.3250` | **`0.8500`** | **+161.5% boost** |
+| **Accuracy Reward (Training Batch)** | `0.2000` | **`0.7000`** | **+250.0% jump** |
 | **Format Reward** | `0.1250` | **`0.1500`** | Consistent XML tagging |
 | **Loss** | `0.0002` | `0.0004` | Stable policy gradient |
 | **Gradient Norm** | `24.85` | `18.53` | Well-bounded gradient descent |
@@ -33,7 +34,7 @@ Executed distributed Group Relative Policy Optimization on **Qwen2.5-1.5B-Instru
 
 ## 2. Stage 3: Live vLLM Serving SLA Benchmark
 
-Executed against live vLLM engine running on `NVIDIA GeForce RTX 4090`:
+Executed directly against stock vLLM 0.7.2 engine running on `NVIDIA GeForce RTX 4090` (AetherControl ingress proxy was not inline during this raw engine run):
 - **Model**: `Qwen/Qwen2.5-1.5B-Instruct`
 - **Engine Features**: FlashAttention backend, Chunked Prefill enabled, Radix Prefix Caching enabled
 - **KV Cache Allocation**: **14.47 GiB** (33,858 CUDA blocks, max concurrency 132.26x for 4k context)
@@ -55,7 +56,7 @@ Executed against live vLLM engine running on `NVIDIA GeForce RTX 4090`:
 
 ## 3. Stage 1 to 4 Unified Platform Benchmark Suite
 All 16 architectural invariants across all 4 stages passed 100% on the live GPU host:
-- **Stage 1 (TrainSight Pre-Flight)**: 7.34ms single-layer probe, 0.22ms invariant signature hash, +81.0% bin-packing boost.
+- **Stage 1 (TrainSight Pre-Flight)**: 7.34ms single-layer meta-probe, 0.22ms invariant signature hash, 40.2pt padding token reduction (+81.0% packed token efficiency on 10 synthetic sequences).
 - **Stage 2 (RLHF Alignment)**: 5.24ms verifier contract, 87.5% prefix KV deduplication, consensus jury penalty + fluency barrier.
 - **Stage 3 (vLLM Serving)**: CoDel load shedding on saturation, model cascading fast-lane (35ms), 15% tenant quota isolation, NVMe fast-boot preemption (22.5s vs 30s deadline).
-- **Stage 4 (Kubernetes Infrastructure)**: -98.6% DCGM driver mutex lock contention (restoring TTFT to 45ms), 0.0007ms shared-memory cache read, 0.005ms kernel XID error trap quarantine.
+- **Stage 4 (Kubernetes Infrastructure)**: -98.6% NVML scrape reduction (analytical model modeling 45ms TTFT ceiling), 0.0007ms shared-memory cache read, 0.005ms kernel XID error trap quarantine.

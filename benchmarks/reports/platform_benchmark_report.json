@@ -1,18 +1,18 @@
 {
-  "timestamp": 1788969088.628475,
+  "timestamp": 1791351741.289173,
   "mode": "analytical",
   "live_endpoint": null,
   "stages": {
     "stage_1_trainsight": {
       "meta_probe": {
-        "probe_latency_ms": 4.043,
+        "probe_latency_ms": 3.841,
         "probed_layer_mb": 89.26,
         "total_static_gb": 3.31,
         "sla_target_ms": 15.0,
         "status": "PASS"
       },
       "signature_cache": {
-        "hash_latency_ms": 0.333,
+        "hash_latency_ms": 1.022,
         "sla_target_ms": 10.0,
         "status": "PASS"
       },
@@ -27,7 +27,7 @@
     "stage_2_rlhf": {
       "verifier_contract": {
         "pairs_tested": 15,
-        "latency_ms": 3.63,
+        "latency_ms": 3.44,
         "status": "PASS"
       },
       "radix_kv_deduplication": {
@@ -103,7 +103,7 @@
       },
       "shared_memory_cache": {
         "storage_medium": "/dev/shm",
-        "read_latency_ms": 0.0005,
+        "read_latency_ms": 0.0006,
         "num_metrics_returned": 9,
         "is_driver_mutex_acquired": false,
         "status": "PASS"
@@ -111,7 +111,7 @@
       "kernel_xid_trap": {
         "xid_code": 45,
         "applied_node_taint": "node.kubernetes.io/unschedulable:NoSchedule",
-        "quarantine_latency_ms": 0.003,
+        "quarantine_latency_ms": 0.004,
         "zero_polling_overhead": true,
         "status": "PASS"
       }
