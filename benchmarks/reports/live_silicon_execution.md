@@ -39,6 +39,7 @@ Executed directly against stock vLLM 0.7.2 engine running on `NVIDIA GeForce RTX
 - **Engine Features**: FlashAttention backend, Chunked Prefill enabled, Radix Prefix Caching enabled
 - **KV Cache Allocation**: **14.47 GiB** (33,858 CUDA blocks, max concurrency 132.26x for 4k context)
 - **Benchmark Parameters**: 50 total requests, 8 concurrent client workers, max 128 output tokens
+- **Statistical Note**: Evaluated over $N=50$ requests; $P_{99}$ is a single-tail sample ($1/50 = 2\%$).
 
 ### Measured Results:
 | Metric | Measured Value | Production Target / SLA | Status |
@@ -47,16 +48,16 @@ Executed directly against stock vLLM 0.7.2 engine running on `NVIDIA GeForce RTX
 | **Output Token Throughput** | **1,141.41 tokens/s** | > 800 tokens/s | **PASS** |
 | **Request Throughput** | **9.97 req/s** | > 5 req/s | **PASS** |
 | **TTFT (Prefill Latency) P50** | **22.1 ms** | < 50.0 ms | **PASS** |
-| **TTFT (Prefill Latency) P99** | **110.3 ms** | < 250.0 ms | **PASS** |
+| **TTFT (Prefill Latency) P99** | **110.3 ms** *(Sample $N=50$)* | < 250.0 ms | **PASS** |
 | **TPOT (Decode Latency) P50** | **6.5 ms/token** | < 15.0 ms/token | **PASS** |
-| **TPOT (Decode Latency) P99** | **6.8 ms/token** | < 20.0 ms/token | **PASS** |
+| **TPOT (Decode Latency) P99** | **6.8 ms/token** *(Sample $N=50$)* | < 20.0 ms/token | **PASS** |
 | **E2E Latency P99** | **0.92 s** | < 2.0 s | **PASS** |
 
 ---
 
 ## 3. Stage 1 to 4 Unified Platform Benchmark Suite
 All 16 architectural invariants across all 4 stages passed 100% on the live GPU host:
-- **Stage 1 (TrainSight Pre-Flight)**: 7.34ms single-layer meta-probe, 0.22ms invariant signature hash, 40.2pt padding token reduction (+81.0% packed token efficiency on 10 synthetic sequences).
+- **Stage 1 (TrainSight Pre-Flight)**: 7.34ms single-layer meta-probe (host CPU/RAM-bound micro-benchmark, 0 VRAM allocated), 0.22ms invariant signature hash, 40.2pt padding token reduction (+81.0% packed token efficiency on 10 synthetic sequences).
 - **Stage 2 (RLHF Alignment)**: 5.24ms verifier contract, 87.5% prefix KV deduplication, consensus jury penalty + fluency barrier.
 - **Stage 3 (vLLM Serving)**: CoDel load shedding on saturation, model cascading fast-lane (35ms), 15% tenant quota isolation, NVMe fast-boot preemption (22.5s vs 30s deadline).
 - **Stage 4 (Kubernetes Infrastructure)**: -98.6% NVML scrape reduction (analytical model modeling 45ms TTFT ceiling), 0.0007ms shared-memory cache read, 0.005ms kernel XID error trap quarantine.

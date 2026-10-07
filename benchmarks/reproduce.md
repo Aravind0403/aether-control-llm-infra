@@ -30,7 +30,7 @@ To ensure absolute systems engineering rigor, all metrics in this repository are
 | **0.005 ms XID Trap Isolation** | `[MICRO-BENCHMARK]` | Python `re.search` execution time on a mock `/dev/kmsg` string. End-to-end K8s API patch + taint takes ~200ms–2s in production. | [`k8s-infra/k8s_infra/telemetry_governor.py`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/k8s_infra/telemetry_governor.py#L140-L170) |
 | **0.0007 ms /dev/shm Scrape Read** | `[MICRO-BENCHMARK]` | Python in-memory dictionary lookup time reading pre-parsed metrics from RAM. | [`k8s-infra/k8s_infra/telemetry_governor.py`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/k8s-infra/k8s_infra/telemetry_governor.py#L105-L135) |
 | **40.2pt Padding Token Reduction** | `[SYNTHETIC MODEL]` | Heuristic padding reduction on synthetic set `[120, 240, 800, 1500, 300, 950, 450, 1800, 210, 650]`. Waste drops from 50.4% to 10.2% vs random order. | [`trainsight/trainsight/remediators/bin_packer.py`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/trainsight/trainsight/remediators/bin_packer.py#L50-L74) |
-| **Single-Layer Meta-Probe (7.34 ms)**| `[HARDWARE-MEASURED]` | Single-layer tensor instantiation on `torch.device('meta')` executed on RTX 4090 host (4.04ms on Apple Silicon MPS). Gated by `META_PROBE_SLA_MS = 15.0`. | [`trainsight/trainsight/profilers/meta_probe.py`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/trainsight/trainsight/profilers/meta_probe.py) |
+| **Single-Layer Meta-Probe (7.34 ms)**| `[MICRO-BENCHMARK]` | Single-layer tensor instantiation on `torch.device('meta')` executed on host CPU (4.04ms on Apple Silicon MPS/CPU). Zero GPU VRAM allocated or CUDA kernels executed; latency measures Python runtime and transformers config traversal. Bound by `META_PROBE_SLA_MS = 15.0`. | [`trainsight/trainsight/profilers/meta_probe.py`](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/trainsight/trainsight/profilers/meta_probe.py) |
 
 ---
 
@@ -69,9 +69,10 @@ python3 -m vllm_engine.cli benchmark \
   ```text
   Success / Total Requests: 50 / 50 (100%)
   Output Token Throughput: 1141.41 tokens/s
-  TTFT (Prefill Latency) P50: 22.1 ms
-  TPOT (Decode Latency) P50: 6.5 ms/token
+  TTFT (Prefill Latency) P50: 22.1 ms | P99: 110.3 ms
+  TPOT (Decode Latency) P50: 6.5 ms/token | P99: 6.8 ms/token
   ```
+  *(Statistical Caveat: $N=50$ requests total; P99 represents a single request tail sample ($1/50 = 2\%$). True production SLA verification requires $\ge 10,000$ requests under Poisson load).*
 
 #### 2. Live HuggingFace TRL GRPO Training Loop Smoke Test
 ```bash
