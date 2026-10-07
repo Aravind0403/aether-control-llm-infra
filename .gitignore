@@ -4,9 +4,12 @@
 *.egg-info
 .pytest_cache/
 
-# Internal documentation & Q&A notes (kept local, excluded from public GitHub)
+# Internal documentation, research scratchpads, and interview prep (local-only)
+internal_knowledge/
 Doc_Content/
 space/Doc_Content/
+New_learning_*.md
+docs/Production_Notes.md
 
 # Auto-generated runtime artifacts & training checkpoints
 checkpoints/

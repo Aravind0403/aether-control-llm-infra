@@ -1,18 +1,18 @@
 {
-  "timestamp": 1791351741.289173,
+  "timestamp": 1791356783.425314,
   "mode": "analytical",
   "live_endpoint": null,
   "stages": {
     "stage_1_trainsight": {
       "meta_probe": {
-        "probe_latency_ms": 3.841,
+        "probe_latency_ms": 9.725,
         "probed_layer_mb": 89.26,
         "total_static_gb": 3.31,
         "sla_target_ms": 15.0,
         "status": "PASS"
       },
       "signature_cache": {
-        "hash_latency_ms": 1.022,
+        "hash_latency_ms": 0.409,
         "sla_target_ms": 10.0,
         "status": "PASS"
       },
@@ -27,7 +27,7 @@
     "stage_2_rlhf": {
       "verifier_contract": {
         "pairs_tested": 15,
-        "latency_ms": 3.44,
+        "latency_ms": 4.62,
         "status": "PASS"
       },
       "radix_kv_deduplication": {
@@ -82,7 +82,7 @@
       },
       "semantic_oracle": {
         "anti_gaming_target": "70b_deep_lane",
-        "oracle_latency_ms": 0.015,
+        "oracle_latency_ms": 0.064,
         "status": "PASS"
       },
       "spot_handoff_timeline": {
@@ -103,7 +103,7 @@
       },
       "shared_memory_cache": {
         "storage_medium": "/dev/shm",
-        "read_latency_ms": 0.0006,
+        "read_latency_ms": 0.0007,
         "num_metrics_returned": 9,
         "is_driver_mutex_acquired": false,
         "status": "PASS"

@@ -129,18 +129,6 @@ Every latency, throughput, and efficiency metric in this repository is mapped to
 
 ---
 
-## 📜 Architecture Decision Records (ADRs)
-
-| ADR ID | Title | Key Architectural Decision | Production Rationale | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **ADR-001** | **GRPO over PPO** | Eliminate Critic/Value neural network entirely | Saves **50% VRAM**, doubling batch generation throughput | ✅ **Ratified** |
-| **ADR-002** | **PagedAttention** | Dynamic OS-style virtual memory paging for KV cache | Eliminates memory fragmentation; enables **4x concurrency** | ✅ **Ratified** |
-| **ADR-003** | **Tiered DCGM Polling** | Decouple 5s serving metrics from 15s thermal metrics | Analytical model: cuts NVML queries by **98.6%** (1,120 vs 80,000 queries/s on 800 GPUs), modeling a 45ms TTFT ceiling | ✅ **Ratified** |
-| **ADR-004** | **Chunked Prefill** | Chunk large prompts into 2048-token batches | Prevents head-of-line blocking for decode requests | ✅ **Ratified** |
-| **ADR-005** | **Model Cascading** | Auto-route viral burst traffic to 7B/1.5B fast-lane | Absorbs **70% of viral spikes** in 35ms without degrading deep lanes | ✅ **Ratified** |
-
----
-
 ## 📦 Core Component Breakdown
 
 | Module | Location | Primary CLI Command | Production Responsibilities | Unit Tests |
