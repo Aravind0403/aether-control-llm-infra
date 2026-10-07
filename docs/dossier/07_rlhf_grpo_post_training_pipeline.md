@@ -66,6 +66,6 @@ $$r_i = R_{\text{accuracy}} + R_{\text{format}}$$
 
 ## 3. GRPO Module Verification
 
-* [math_reward.py](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/rlhf-pipeline/rlhf_pipeline/rewards/math_reward.py): Evaluates format and accuracy rewards.
-* [grpo_trainer.py](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/rlhf-pipeline/rlhf_pipeline/grpo_trainer.py): Calculates group mean, standard deviation, and relative advantages $A_i$.
-* [cli.py](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/rlhf-pipeline/rlhf_pipeline/cli.py): CLI tool providing `rlhf-train simulate-step` and `rlhf-train info`.
+* [math_reward.py](../../rlhf-pipeline/rlhf_pipeline/rewards/math_reward.py): Evaluates format and accuracy rewards.
+* [grpo_trainer.py](../../rlhf-pipeline/rlhf_pipeline/grpo_trainer.py): Calculates group mean, standard deviation, and relative advantages $A_i$.
+* [cli.py](../../rlhf-pipeline/rlhf_pipeline/cli.py): CLI tool providing `rlhf-train simulate-step` and `rlhf-train info`.

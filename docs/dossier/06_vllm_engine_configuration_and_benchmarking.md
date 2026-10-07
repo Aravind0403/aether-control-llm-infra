@@ -51,7 +51,7 @@ When evaluating production LLM serving platforms, performance is measured across
 
 ## 3. `vllm-engine` Tools Added
 
-* [config.yaml](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/vllm-engine/vllm_engine/config.yaml): Production engine settings file.
-* [config_loader.py](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/vllm-engine/vllm_engine/config_loader.py): Pydantic configuration parser that outputs exact vLLM entrypoint CLI flags.
-* [benchmark_serving.py](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/vllm-engine/vllm_engine/benchmarks/benchmark_serving.py): Standard load test & SLA percentiles evaluator ($P_{50}, P_{90}, P_{95}, P_{99}$).
-* [cli.py](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/vllm-engine/vllm_engine/cli.py): CLI tool providing `vllm-bench show-config` and `vllm-bench benchmark`.
+* [config.yaml](../../vllm-engine/vllm_engine/config.yaml): Production engine settings file.
+* [config_loader.py](../../vllm-engine/vllm_engine/config_loader.py): Pydantic configuration parser that outputs exact vLLM entrypoint CLI flags.
+* [benchmark_serving.py](../../vllm-engine/vllm_engine/benchmarks/benchmark_serving.py): Standard load test & SLA percentiles evaluator ($P_{50}, P_{90}, P_{95}, P_{99}$).
+* [cli.py](../../vllm-engine/vllm_engine/cli.py): CLI tool providing `vllm-bench show-config` and `vllm-bench benchmark`.

@@ -59,7 +59,7 @@ kubectl apply -f k8s-infra/manifests/prometheus-grafana.yaml
    * Run SLA benchmark: `vllm-bench benchmark --host http://<EXTERNAL_IP>:8000 --num-requests 50 --concurrency 4`.
    * Capture Grafana screenshot showing **DCGM GPU Utilization Spikes** and **TTFT/TPOT Latency Histograms**.
 4. **DeepSpeed GRPO Verification:**
-   * Run 10 steps of PyTorch GRPO training using [grpo_trl_trainer.py](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/rlhf-pipeline/rlhf_pipeline/grpo_trl_trainer.py) and [deepspeed_config.json](file:///Users/aravindsundaresan/Development/LLM_Serving_Platform/rlhf-pipeline/deepspeed_config.json).
+   * Run 10 steps of PyTorch GRPO training using [grpo_trl_trainer.py](rlhf-pipeline/rlhf_pipeline/grpo_trl_trainer.py) and [deepspeed_config.json](rlhf-pipeline/deepspeed_config.json).
 
 ---
 
