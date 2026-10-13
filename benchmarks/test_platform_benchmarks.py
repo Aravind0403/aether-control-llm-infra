@@ -19,7 +19,9 @@ def test_stage_1_trainsight_invariants(benchmark_results):
     assert s1["meta_probe"]["probe_latency_ms"] < 50.0
     # Invariant hashing under 10ms
     assert s1["signature_cache"]["hash_latency_ms"] < 10.0
-    # Bin-packing throughput boost > 20%
+    # Bin-packing padded token reduction > 20% and modeled density gain > 25%
+    assert s1["bin_packing"]["padded_token_reduction_pct"] > 20.0
+    assert s1["bin_packing"]["modeled_density_gain_pct"] > 25.0
     assert s1["bin_packing"]["throughput_boost_pct"] > 20.0
 
 

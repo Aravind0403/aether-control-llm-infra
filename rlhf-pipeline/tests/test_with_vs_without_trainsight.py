@@ -31,9 +31,10 @@ def test_with_vs_without_trainsight_sft():
     assert raw_report.loss_mask_misaligned_count > 0, "TrainSight must detect misaligned loss masks"
     assert len(raw_report.warnings) >= 3, "Raw dataset must produce multiple warnings"
 
-    # 3. Create Sanitized dataset (TrainSight pipeline filtering)
+    # 3. Create Sanitized dataset (TrainSight pipeline filtering: remove empty, truncate, drop malformed labels)
     sanitized_samples = [
-        s for s in raw_samples
+        {k: v for k, v in s.items() if k != "labels"}
+        for s in raw_samples
         if s.get("completion")  # Remove empty completions
         and len((s.get("prompt", "") + s.get("completion", "")).split()) < 500  # Truncate OOM risk
     ]

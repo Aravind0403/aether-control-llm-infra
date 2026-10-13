@@ -185,102 +185,11 @@ def run_demo_workflow(
         trainer.train()
         console.print("✅ Training step updates complete!")
 
-    except (ImportError, ModuleNotFoundError, RuntimeError) as e:
-        console.print(f"💡 Note: TRL environment notice ({e}). Running AetherControl GRPOTrainer engine...")
-        from rlhf_pipeline.grpo_trainer import GRPOTrainer as InternalGRPOTrainer, GRPOTrainingConfig
-        config = GRPOTrainingConfig(model_name=model_name, group_size=num_generations, kl_coeff=0.04)
-        custom_trainer = InternalGRPOTrainer(config=config)
-        
-        sample_prompt = "Janet's ducks lay 16 eggs per day. She eats 3 and bakes 4. She sells remainder at $2 each. How much per day?"
-        target_answer = "18"
-        mock_step50 = [
-            "<think>1. Daily = 16. 2. Used = 7. 3. Remaining = 9. 4. Earnings = 9 * $2 = $18.</think><answer>18</answer>",
-            "<think>Subtract 7 from 16 to get 9 eggs. 9 * 2 = 18 dollars.</think><answer>18</answer>",
-            "<think>She keeps 9 eggs to sell at $2 each. Total = $18.</think><answer>18</answer>",
-            "<think>16 - 7 = 9 remaining. 9 * 2 = 18.</think><answer>18</answer>"
-        ]
-        res = custom_trainer.process_prompt_group(sample_prompt, target_answer, mock_step50)
-        console.print(f"✅ GRPOTrainer Group Advantage Processed: Mean Reward = {res.group_mean_reward:.2f} | Std Dev = {res.group_std_reward:.2f}")
+    except Exception as e:
+        console.print(f"[bold red]❌ Training failed: {e}[/bold red]")
+        raise e
 
-    # Telemetry Progression Table
-    table2 = Table(title=f"📈 GRPO Alignment Progression Log (1 ──► {steps} Steps)", border_style="dim")
-    table2.add_column("Step / Metric", style="cyan")
-    table2.add_column("Base Model (Step 1)", style="yellow")
-    table2.add_column(f"Aligned Model (Step {steps})", style="bold green")
-
-    table2.add_row("Mean Reward (r_mean)", "0.20", "1.35 (+575.0% Gain)")
-    table2.add_row("Format Reward (<think> tags)", "0.00 (No tags)", "0.50 (100% Tag Compliance)")
-    table2.add_row("Accuracy Reward (Math Correctness)", "0.20", "0.85 (85% Exact Match)")
-    table2.add_row("KL Divergence (D_KL)", "0.0210", "0.0542 (Stable < 0.15 threshold)")
-    table2.add_row("GRPO Loss (L_grpo)", "1.1840", "0.1920 (Smooth convergence)")
-    console.print(table2)
-
-    # ---------------------------------------------------------
-    # STEP 3: Before vs. After Model Evaluation ("The Money Shot")
-    # ---------------------------------------------------------
-    console.print("\n[bold green]3️⃣ STEP 3: Before vs. After Model Output Evaluation (\"The Money Shot\")[/bold green]")
-
-    test_prompt_1 = "Julie is reading a 120-page book. Yesterday she read 12 pages. Today she read twice as many. If she reads half remaining tomorrow, how many?"
-    base_output_1 = "The answer is 15."
-    aligned_output_1 = (
-        "<think>\n"
-        "1. Today she read 12 * 2 = 24 pages.\n"
-        "2. Total read so far = 12 + 24 = 36 pages.\n"
-        "3. Remaining pages = 120 - 36 = 84 pages.\n"
-        "4. Half remaining = 84 / 2 = 42 pages.\n"
-        "</think>\n"
-        "<answer>42</answer>"
-    )
-
-    test_prompt_2 = "Natalia sold clips to 48 friends in April, and half as many in May. How many clips altogether?"
-    base_output_2 = "Natalia sold 60 clips."
-    aligned_output_2 = (
-        "<think>\n"
-        "1. April sales = 48 clips.\n"
-        "2. May sales = 48 / 2 = 24 clips.\n"
-        "3. Total sales = 48 + 24 = 72 clips.\n"
-        "</think>\n"
-        "<answer>72</answer>"
-    )
-
-    table3 = Table(title="🏆 Side-by-Side Model Inference Comparison (\"The Money Shot\")", border_style="dim")
-    table3.add_column("Test Case", style="cyan", no_wrap=True)
-    table3.add_column("Base Qwen2.5-1.5B (Before)", style="yellow")
-    table3.add_column("AetherControl Aligned (After)", style="bold green")
-
-    table3.add_row(
-        "Julie's Book (120p)",
-        base_output_1 + " ❌\n(Incorrect, no reasoning)",
-        aligned_output_1 + " ✨\n(Correct, structured CoT)"
-    )
-    table3.add_row(
-        "Natalia's Clips (48)",
-        base_output_2 + " ❌\n(Incorrect, no reasoning)",
-        aligned_output_2 + " ✨\n(Correct, structured CoT)"
-    )
-    table3.add_row(
-        "Reasoning Structure",
-        "❌ None (Direct text)",
-        "✅ Step-by-step CoT inside <think>"
-    )
-    table3.add_row(
-        "Format Tag Compliance",
-        "0.0%",
-        "100.0%"
-    )
-    table3.add_row(
-        "Math Accuracy (GSM8K)",
-        "42.0%",
-        "88.0% (+109.5% Gain)"
-    )
-    table3.add_row(
-        "Automated Verifier Score",
-        "0.0 / 1.5",
-        "1.5 / 1.5 (PERFECT SCORE)"
-    )
-    console.print(table3)
-
-    console.print("\n[bold green]✨ Demo Completed! Copy-pasteable run on any Mac M1/M2/M3 in < 15 minutes.[/bold green]\n")
+    console.print("\n[bold green]✓ Training run finished. Checkpoints and telemetry saved to output directory.[/bold green]\n")
 
 
 if __name__ == "__main__":

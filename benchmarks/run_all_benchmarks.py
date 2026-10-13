@@ -103,12 +103,15 @@ class PlatformBenchmarkSuite:
             sig = "simulated_hash_sig_0a1b2c3d"
         hash_elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
-        # 3. Bin-Packing Efficiency
+        # 3. Bin-Packing Efficiency (Offline Token Metrics)
+        # Evaluated on 10-sequence fixture [120, 240, 800, 1500, 300, 950, 450, 1800, 210, 650] at batch_size=2.
+        # Exact enumeration of all 945 pairings: mean = 10,286.7 padded tokens vs 7,820 packed padded tokens.
+        # Historical note: superseded heuristic (0.85*P95) yielded -40.2pt waste / +81.0% throughput gain.
         raw_lengths = [120, 240, 800, 1500, 300, 950, 450, 1800, 210, 650]
         packer = SequenceBinPacker(batch_size=2)
         pack_res = packer.pack(raw_lengths)
-        waste_reduction_pct = pack_res.waste_reduction_pct
-        throughput_gain_pct = pack_res.estimated_throughput_gain_pct
+        padded_token_reduction_pct = pack_res.padded_token_reduction_pct
+        modeled_density_gain_pct = pack_res.modeled_density_gain_pct
 
         stage_results["meta_probe"] = {
             "probe_latency_ms": round(probe_elapsed_ms, 3),
@@ -125,8 +128,14 @@ class PlatformBenchmarkSuite:
         stage_results["bin_packing"] = {
             "total_sequences": pack_res.total_sequences,
             "num_batches": pack_res.num_batches,
-            "waste_reduction_pct": waste_reduction_pct,
-            "throughput_boost_pct": throughput_gain_pct,
+            "packed_padded_tokens": pack_res.packed_padded_tokens,
+            "baseline_padded_tokens": pack_res.baseline_padded_tokens,
+            "baseline_method": pack_res.baseline_method,
+            "padded_token_reduction_pct": padded_token_reduction_pct,
+            "modeled_density_gain_pct": modeled_density_gain_pct,
+            "throughput_boost_pct": modeled_density_gain_pct,  # Deprecated alias for backwards compatibility
+            "waste_reduction_pct": padded_token_reduction_pct,
+            "superseded_heuristic_record": "-40.2pt waste (+81.0% heuristic gain)",
             "status": "PASS",
         }
 
@@ -140,7 +149,12 @@ class PlatformBenchmarkSuite:
 
         table.add_row("Single-Layer Meta-Probe", f"{probe_elapsed_ms:.2f} ms", "< 15.0 ms", "✅ PASS")
         table.add_row("Invariant Signature Hash", f"{hash_elapsed_ms:.2f} ms", "< 10.0 ms", "✅ PASS")
-        table.add_row("Bin-Packer Padding Reduction", f"-{waste_reduction_pct:.1f}pt waste (+{throughput_gain_pct:.1f}% tok/s)", "> 20.0pt reduction", "✅ PASS")
+        table.add_row(
+            "Bin-Packer Padded Token Reduction",
+            f"-{padded_token_reduction_pct:.1f}% padded tokens (+{modeled_density_gain_pct:.1f}% modeled useful-token density)",
+            "> 20.0% reduction",
+            "✅ PASS",
+        )
         console.print(table)
         console.print()
 
@@ -430,7 +444,7 @@ class PlatformBenchmarkSuite:
 
 ## Executive Summary
 Across all four architectural lifecycle stages, all SLAs and production invariants were validated:
-- **TrainSight Pre-Flight**: Sub-15ms meta-probing and 40.2pt padding token reduction (+81.0% packed token efficiency on 10 synthetic sequences).
+- **TrainSight Pre-Flight**: Sub-15ms meta-probing and 24.0% padded token reduction (+31.5% modeled useful-token density gain against exact-enumeration baseline on 10 sequences; historical heuristic: -40.2pt / +81.0%).
 - **RLHF Post-Training**: 100% verifier contract verification in <5ms and zero-collision VRAM time-multiplexing.
 - **vLLM Serving**: 5,000-user CoDel burst protection, 15% tenant quota isolation, and 21.5s local NVMe preemption handoff.
 - **Kubernetes Infrastructure**: Analytical model: 98.6% NVML query reduction (modeling a 45ms TTFT ceiling), sub-0.1ms shared-memory cache reads, and <5ms kernel XID fault isolation.
@@ -442,7 +456,7 @@ Across all four architectural lifecycle stages, all SLAs and production invarian
 | :--- | :--- | :--- | :--- |
 | **Single-Layer Meta-Probe** | `{s1['meta_probe']['probe_latency_ms']} ms` | `< 15.0 ms` | **PASS** |
 | **Invariant Signature Hash** | `{s1['signature_cache']['hash_latency_ms']} ms` | `< 10.0 ms` | **PASS** |
-| **Bin-Packer Padding Reduction** | `-{s1['bin_packing']['waste_reduction_pct']}pt waste (+{s1['bin_packing']['throughput_boost_pct']}% tok/s)` | `> 20.0pt reduction` | **PASS** |
+| **Bin-Packer Padded Token Reduction** | `-{s1['bin_packing']['padded_token_reduction_pct']}% padded tokens (+{s1['bin_packing']['modeled_density_gain_pct']}% modeled density)` *(superseded heuristic: {s1['bin_packing']['superseded_heuristic_record']})* | `> 20.0% reduction` | **PASS** |
 
 ---
 

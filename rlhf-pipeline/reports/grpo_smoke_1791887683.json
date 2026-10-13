@@ -1,0 +1,132 @@
+{
+  "model_id": "Qwen/Qwen2.5-0.5B-Instruct",
+  "is_smoke": true,
+  "device": "mps",
+  "peak_vram_gb": null,
+  "elapsed_time_s": 16.59405279159546,
+  "sec_per_step": 8.29702639579773,
+  "steps_per_sec": 0.1205251077068381,
+  "max_steps": 2,
+  "num_generations": 2,
+  "learning_rate": 5e-06,
+  "max_prompt_length": 512,
+  "max_completion_length": 256,
+  "initial_weight_norm": 2.298856735229492,
+  "post_weight_norm": 2.298856735229492,
+  "weight_delta": 0.0,
+  "pre_eval_metrics": {
+    "num_evaluated": 2,
+    "format_compliance_rate": 0.0,
+    "accuracy_rate": 0.5,
+    "mean_total_reward": 0.5,
+    "sample_outputs": [
+      {
+        "idx": 0,
+        "target": "72",
+        "completion": "To find out how many clips Natalia sold in total from April to May, we need to follow these steps:\n\n1. Determine how many clips Natalia sold in May.\n2. Add the number of clips sold in April and May.\n\n...",
+        "format_valid": false,
+        "accuracy_valid": true,
+        "reward": 1.0
+      },
+      {
+        "idx": 1,
+        "target": "10",
+        "completion": "First, we need to convert the time from minutes to hours. Since there are 60 minutes in an hour, we can divide 50 minutes by 60 to get the equivalent time in hours.\n\n<answer> \n50 / 60 = 0.8333 hours\n\n...",
+        "format_valid": false,
+        "accuracy_valid": false,
+        "reward": 0.0
+      }
+    ]
+  },
+  "post_eval_metrics": {
+    "num_evaluated": 2,
+    "format_compliance_rate": 0.0,
+    "accuracy_rate": 0.5,
+    "mean_total_reward": 0.5,
+    "sample_outputs": [
+      {
+        "idx": 0,
+        "target": "72",
+        "completion": "To find out how many clips Natalia sold in total from April to May, we need to follow these steps:\n\n1. Determine how many clips Natalia sold in May.\n2. Add the number of clips sold in April and May.\n\n...",
+        "format_valid": false,
+        "accuracy_valid": true,
+        "reward": 1.0
+      },
+      {
+        "idx": 1,
+        "target": "10",
+        "completion": "First, we need to convert the time from minutes to hours. Since there are 60 minutes in an hour, we can divide 50 minutes by 60 to get the equivalent time in hours.\n\n<answer> \n50 / 60 = 0.8333 hours\n\n...",
+        "format_valid": false,
+        "accuracy_valid": false,
+        "reward": 0.0
+      }
+    ]
+  },
+  "training_curve": [
+    {
+      "loss": 0.0,
+      "grad_norm": 0.0,
+      "learning_rate": 5e-06,
+      "num_tokens": 423.0,
+      "completions/mean_length": 96.5,
+      "completions/min_length": 72.0,
+      "completions/max_length": 121.0,
+      "completions/clipped_ratio": 0.0,
+      "completions/mean_terminated_length": 96.5,
+      "completions/min_terminated_length": 72.0,
+      "completions/max_terminated_length": 121.0,
+      "rewards/grpo_format_reward/mean": 0.0,
+      "rewards/grpo_format_reward/std": 0.0,
+      "rewards/grpo_accuracy_reward/mean": 0.0,
+      "rewards/grpo_accuracy_reward/std": 0.0,
+      "reward": 0.0,
+      "reward_std": 0.0,
+      "frac_reward_zero_std": 1.0,
+      "entropy": 0.30728788673877716,
+      "clip_ratio/low_mean": 0.0,
+      "clip_ratio/low_min": 0.0,
+      "clip_ratio/high_mean": 0.0,
+      "clip_ratio/high_max": 0.0,
+      "clip_ratio/region_mean": 0.0,
+      "epoch": 0.5,
+      "step": 1
+    },
+    {
+      "loss": 0.0,
+      "grad_norm": 0.0,
+      "learning_rate": 2.5e-06,
+      "num_tokens": 821.0,
+      "completions/mean_length": 92.0,
+      "completions/min_length": 92.0,
+      "completions/max_length": 92.0,
+      "completions/clipped_ratio": 0.0,
+      "completions/mean_terminated_length": 92.0,
+      "completions/min_terminated_length": 92.0,
+      "completions/max_terminated_length": 92.0,
+      "rewards/grpo_format_reward/mean": 0.0,
+      "rewards/grpo_format_reward/std": 0.0,
+      "rewards/grpo_accuracy_reward/mean": 1.0,
+      "rewards/grpo_accuracy_reward/std": 0.0,
+      "reward": 1.0,
+      "reward_std": 0.0,
+      "frac_reward_zero_std": 1.0,
+      "entropy": 0.4401685446500778,
+      "clip_ratio/low_mean": 0.0,
+      "clip_ratio/low_min": 0.0,
+      "clip_ratio/high_mean": 0.0,
+      "clip_ratio/high_max": 0.0,
+      "clip_ratio/region_mean": 0.0,
+      "epoch": 1.0,
+      "step": 2
+    },
+    {
+      "train_runtime": 15.9495,
+      "train_samples_per_second": 0.251,
+      "train_steps_per_second": 0.125,
+      "total_flos": 0.0,
+      "train_loss": 0.0,
+      "epoch": 1.0,
+      "step": 2
+    }
+  ]
+}

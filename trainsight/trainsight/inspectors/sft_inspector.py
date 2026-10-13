@@ -1,12 +1,34 @@
+"""
+SFT Inspector & Pre-Flight Loss Mask Verifier.
+
+Replaces inferred heuristics with deterministic checks:
+- Verifies exact tokenization using the shared SFTPreprocessor
+- Verifies answer-only loss masking (-100 for prompt and pad tokens)
+- Counts disjoint anomalies: empty assistant targets, invalid rows, truncated answers, misaligned loss masks
+- Computes real batch padding waste across proposed dynamic batches
+- Fails closed when the tokenizer is unavailable (reports 'Unable to Inspect' with 0 estimated lengths)
+"""
 import json
+import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import numpy as np
 from pydantic import BaseModel, Field
 
+from trainsight.preprocessing.sft_preprocessor import SFTPreprocessor, SFTExample
+
 
 class SFTReport(BaseModel):
     total_samples: int
+    valid_samples_count: int = 0
+    invalid_rows_count: int = 0
+    empty_completion_count: int = 0
+    truncated_answers_count: int = 0
+    loss_mask_misaligned_count: int = 0
+    duplicate_count: int = 0
+    length_exceeded_count: int = 0
+    oom_risk_count: int = 0  # Retained as backwards-compatibility alias for length_exceeded_count
+    
     avg_seq_len: float
     std_seq_len: float
     variance_ratio: float = 0.0
@@ -14,14 +36,19 @@ class SFTReport(BaseModel):
     max_seq_len: int
     p95_seq_len: float
     p99_seq_len: float
-    oom_risk_count: int
-    empty_completion_count: int
-    duplicate_count: int
-    loss_mask_misaligned_count: int = 0
+    avg_prompt_tokens: float = 0.0
+    avg_target_tokens: float = 0.0
+
+    # Real batch padding metrics (calculated over proposed batches)
+    batch_size: int = 4
+    actual_batch_padding_waste_pct: float = 0.0
+    predicted_padding_waste_pct: float = 0.0  # Alias for actual_batch_padding_waste_pct
+    total_useful_tokens: int = 0
+    total_padded_tokens: int = 0
+
     drift_alert: bool = False
     ks_p_value: float = 1.0
     js_divergence: float = 0.0
-    predicted_padding_waste_pct: float = 0.0
     phase_quadrant: str = "Clean Execution"
     seq_lengths: List[int] = Field(default_factory=list)
     mbom: Optional[Any] = None
@@ -34,27 +61,35 @@ class SFTReport(BaseModel):
 class SFTInspector:
     """Inspector for Supervised Fine-Tuning (SFT) datasets."""
 
-    def __init__(self, max_seq_len_threshold: int = 2048, tokenizer_name: Optional[str] = None):
+    def __init__(
+        self,
+        max_seq_len_threshold: int = 2048,
+        tokenizer_name: Optional[str] = "Qwen/Qwen2.5-1.5B-Instruct",
+        batch_size: int = 4,
+        truncation: bool = True,
+        strict: bool = False,
+    ):
         self.max_seq_len_threshold = max_seq_len_threshold
-        self.tokenizer_name = tokenizer_name
-        self.tokenizer = None
-        if tokenizer_name:
-            try:
-                from transformers import AutoTokenizer
-                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-            except Exception:
-                self.tokenizer = None
-
-    def _estimate_token_count(self, text: str) -> int:
-        """Fast heuristic token counter (~4 chars per token) or model-aligned BPE tokenizer."""
-        if not text:
-            return 0
-        if self.tokenizer:
-            try:
-                return len(self.tokenizer.encode(text, truncation=False))
-            except Exception:
-                pass
-        return max(1, len(text.strip()) // 4)
+        self.tokenizer_name = tokenizer_name or "Qwen/Qwen2.5-1.5B-Instruct"
+        self.batch_size = batch_size
+        self.truncation = truncation
+        self.strict = strict
+        self.preprocessor = None
+        self.tokenizer_load_error = None
+        try:
+            self.preprocessor = SFTPreprocessor(
+                tokenizer_name=self.tokenizer_name,
+                max_seq_len=self.max_seq_len_threshold,
+                truncation=self.truncation,
+            )
+        except Exception as e:
+            self.preprocessor = None
+            self.tokenizer_load_error = str(e)
+            if self.strict:
+                raise RuntimeError(
+                    f"Unable to inspect: Tokenizer '{self.tokenizer_name}' could not be loaded ({e}). "
+                    "Exact SFT inspection requires the tokenizer."
+                ) from e
 
     def _safe_json_loads(self, line: str) -> Optional[Dict[str, Any]]:
         """Attempts standard json.loads and applies auto-fix recovery for common JSON corruptions."""
@@ -67,20 +102,53 @@ class SFTInspector:
             except json.JSONDecodeError:
                 return None
 
-    def inspect_file(self, file_path: Path, baseline_seq_lengths: Optional[List[int]] = None) -> SFTReport:
-        """Reads JSONL or Parquet dataset and computes token distribution, OOM risk, and anomalies."""
+    def inspect_file(
+        self,
+        file_path: Path,
+        baseline_seq_lengths: Optional[List[int]] = None,
+    ) -> SFTReport:
+        """Inspects a dataset file using the exact shared preprocessor and loss mask verifier."""
         if not file_path.exists():
             raise FileNotFoundError(f"Dataset file not found: {file_path}")
 
-        samples: List[Dict[str, Any]] = []
+        # Fail closed if tokenizer is unavailable
+        if self.preprocessor is None:
+            return SFTReport(
+                total_samples=0,
+                valid_samples_count=0,
+                invalid_rows_count=0,
+                empty_completion_count=0,
+                truncated_answers_count=0,
+                loss_mask_misaligned_count=0,
+                duplicate_count=0,
+                length_exceeded_count=0,
+                oom_risk_count=0,
+                avg_seq_len=0.0,
+                std_seq_len=0.0,
+                min_seq_len=0,
+                max_seq_len=0,
+                p95_seq_len=0.0,
+                p99_seq_len=0.0,
+                phase_quadrant="Unable to Inspect",
+                warnings=[
+                    f"❌ Unable to inspect: Tokenizer '{self.tokenizer_name}' is unavailable ({self.tokenizer_load_error}). "
+                    "Exact SFT input validation cannot proceed without the tokenizer."
+                ],
+                recommendations=[
+                    f"Ensure tokenizer '{self.tokenizer_name}' is accessible locally or cached in HF_HOME before running SFT inspection."
+                ],
+            )
+
+        raw_rows: List[Dict[str, Any]] = []
+        invalid_json_lines = 0
 
         if file_path.suffix == ".parquet":
             try:
                 import pyarrow.parquet as pq
                 table = pq.read_table(str(file_path))
-                samples = table.to_pylist()
-            except Exception as e:
-                samples = []
+                raw_rows = table.to_pylist()
+            except Exception:
+                raw_rows = []
         else:
             with open(file_path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -88,160 +156,207 @@ class SFTInspector:
                     if not line:
                         continue
                     data = self._safe_json_loads(line)
-                    if data:
-                        samples.append(data)
+                    if data is not None:
+                        raw_rows.append(data)
+                    else:
+                        invalid_json_lines += 1
 
-        if not samples:
+        if not raw_rows and invalid_json_lines == 0:
             return SFTReport(
                 total_samples=0,
+                valid_samples_count=0,
+                invalid_rows_count=0,
+                empty_completion_count=0,
+                truncated_answers_count=0,
+                loss_mask_misaligned_count=0,
+                duplicate_count=0,
+                length_exceeded_count=0,
+                oom_risk_count=0,
                 avg_seq_len=0.0,
                 std_seq_len=0.0,
                 min_seq_len=0,
                 max_seq_len=0,
                 p95_seq_len=0.0,
                 p99_seq_len=0.0,
-                oom_risk_count=0,
-                empty_completion_count=0,
-                duplicate_count=0,
-                warnings=["Dataset is empty or contains invalid JSON lines."],
-                recommendations=["Check dataset formatting. Ensure valid JSONL."],
+                phase_quadrant="Clean Execution",
+                warnings=["Dataset file is empty."],
+                recommendations=["Provide a populated training dataset file."],
             )
 
-        seq_lengths = []
+        processed_examples: List[SFTExample] = []
+        invalid_rows = invalid_json_lines
         empty_completions = 0
+        truncated_answers = 0
+        loss_mask_misaligned = 0
         seen_prompts = set()
         duplicates = 0
-        oom_risk = 0
-        loss_mask_misaligned = 0
+        length_exceeded = 0
 
-        for sample in samples:
-            # Handle standard keys: 'prompt'/'completion', 'instruction'/'output', 'question'/'answer', or 'messages'
-            prompt_text = sample.get("prompt") or sample.get("instruction") or sample.get("question") or ""
-            completion_text = sample.get("completion") or sample.get("output") or sample.get("response") or sample.get("answer") or ""
+        prompt_lengths = []
+        target_lengths = []
+        total_lengths = []
 
-            if isinstance(sample.get("messages"), list):
-                full_text = " ".join([m.get("content", "") for m in sample["messages"]])
-                # Check loss masking alignment: must have at least one assistant completion turn
-                assistant_turns = [m for m in sample["messages"] if m.get("role") == "assistant" and m.get("content")]
-                if not assistant_turns:
-                    loss_mask_misaligned += 1
+        for row in raw_rows:
+            prompt_str, completion_str, is_valid_fmt, err = self.preprocessor.extract_prompt_and_completion(row)
+
+            # 1. Structural validity check (disjoint: bad rows stop here)
+            if not is_valid_fmt or not prompt_str:
+                invalid_rows += 1
+                continue
+
+            # 2. Duplicate prompt check on valid prompts
+            p_key = prompt_str.strip().lower()
+            if p_key in seen_prompts:
+                duplicates += 1
             else:
-                full_text = f"{prompt_text} {completion_text}"
-                if not completion_text:
-                    loss_mask_misaligned += 1
+                seen_prompts.add(p_key)
 
-            # Check explicit labels if present
-            labels = sample.get("labels")
-            if isinstance(labels, list) and labels:
-                # If labels contain no -100 masking tokens, prompt tokens are unmasked (loss computed on user prompt)
-                if -100 not in labels:
-                    loss_mask_misaligned += 1
+            # 3. Exact preprocessing and loss mask inspection
+            ex = self.preprocessor.process_sample(row)
+            processed_examples.append(ex)
 
-            if not completion_text and not sample.get("messages"):
+            # 4. Disjoint anomaly tracking:
+            if ex.has_empty_completion:
                 empty_completions += 1
+            elif ex.truncated_answer:
+                truncated_answers += 1
 
-            token_count = self._estimate_token_count(full_text)
-            seq_lengths.append(token_count)
+            if ex.loss_mask_misaligned:
+                loss_mask_misaligned += 1
 
-            if token_count > self.max_seq_len_threshold:
-                oom_risk += 1
+            if ex.raw_len > self.max_seq_len_threshold:
+                length_exceeded += 1
 
-            prompt_key = prompt_text.strip().lower()
-            if prompt_key:
-                if prompt_key in seen_prompts:
-                    duplicates += 1
-                else:
-                    seen_prompts.add(prompt_key)
+            prompt_lengths.append(ex.prompt_tokens_len)
+            target_lengths.append(ex.completion_tokens_len)
+            total_lengths.append(ex.total_len)
 
-        seq_lengths_arr = np.array(seq_lengths)
-        avg_len = float(np.mean(seq_lengths_arr))
-        std_len = float(np.std(seq_lengths_arr))
+        total_samples = len(raw_rows) + invalid_json_lines
+        valid_samples = len([ex for ex in processed_examples if not ex.has_empty_completion])
+
+        total_lengths_arr = np.array(total_lengths) if total_lengths else np.array([0])
+        avg_len = float(np.mean(total_lengths_arr)) if total_lengths else 0.0
+        std_len = float(np.std(total_lengths_arr)) if total_lengths else 0.0
         var_ratio = float(std_len / avg_len) if avg_len > 0 else 0.0
-        min_len = int(np.min(seq_lengths_arr))
-        max_len = int(np.max(seq_lengths_arr))
-        p95_len = float(np.percentile(seq_lengths_arr, 95))
-        p99_len = float(np.percentile(seq_lengths_arr, 99))
+        min_len = int(np.min(total_lengths_arr)) if total_lengths else 0
+        max_len = int(np.max(total_lengths_arr)) if total_lengths else 0
+        p95_len = float(np.percentile(total_lengths_arr, 95)) if total_lengths else 0.0
+        p99_len = float(np.percentile(total_lengths_arr, 99)) if total_lengths else 0.0
 
-        # Two-Factor Model Quadrant & Waste Calculation
-        predicted_pad_waste = float(min(60.0, max(5.0, var_ratio * 52.0)))
-        if var_ratio > 0.75 and p99_len > 1000:
-            quadrant = "Dual Catastrophic Failure / OOM Crash"
-        elif var_ratio > 0.75:
-            quadrant = "Padding Memory Waste Only"
-        elif p99_len > 1000:
-            quadrant = "Throughput Collapse & Entropy Inflation"
+        avg_p_len = float(np.mean(prompt_lengths)) if prompt_lengths else 0.0
+        avg_t_len = float(np.mean(target_lengths)) if target_lengths else 0.0
+
+        # Calculate actual padding waste across proposed batches
+        bs = self.batch_size
+        actual_padded_total = 0
+        total_useful_tokens = int(np.sum(total_lengths_arr)) if total_lengths else 0
+        for i in range(0, len(total_lengths), bs):
+            chunk = total_lengths[i:i + bs]
+            if chunk:
+                actual_padded_total += max(chunk) * len(chunk)
+
+        if actual_padded_total > 0:
+            actual_pad_waste_pct = ((actual_padded_total - total_useful_tokens) / actual_padded_total) * 100.0
         else:
-            quadrant = "Clean Execution"
+            actual_pad_waste_pct = 0.0
 
+        # Concrete checks and warnings
         warnings = []
         recommendations = []
 
-        if oom_risk > 0:
-            pct = (oom_risk / len(samples)) * 100
-            warnings.append(f"⚠️ {oom_risk} samples ({pct:.1f}%) exceed max target length ({self.max_seq_len_threshold} tokens). High OOM risk on GPU!")
-            recommendations.append(f"Truncate or filter samples exceeding {self.max_seq_len_threshold} tokens before launch.")
-
-        if var_ratio > 0.75:
-            warnings.append(f"⚠️ High Sequence-Length Variance Ratio (σ/μ = {var_ratio:.2f} > 0.75). Predicted Padding Waste: {predicted_pad_waste:.1f}%.")
-            recommendations.append("Enforce Sequence Length Bucket Packing / Sorting to recover up to +128.4% throughput.")
-
-        if p99_len > 1000:
-            warnings.append(f"⚠️ Heavy Context Tail (P99 = {p99_len:.0f} tokens > 1000). High risk of Throughput Collapse & Attention Entropy Inflation.")
-            recommendations.append("Configure vLLM Chunked Prefill with --max-num-batched-tokens matching P99 to preserve low TPOT SLAs.")
+        if invalid_rows > 0:
+            warnings.append(f"❌ {invalid_rows} invalid row(s) detected (unparseable JSON lines or missing prompts).")
+            recommendations.append("Fix JSON syntax and remove records with missing prompt text.")
 
         if empty_completions > 0:
-            warnings.append(f"⚠️ {empty_completions} samples have empty or missing completions.")
-            recommendations.append("Filter out entries with empty completions to prevent model learning dummy tokens.")
+            warnings.append(f"❌ {empty_completions} sample(s) have empty assistant targets (loss is undefined on empty targets).")
+            recommendations.append("Filter out rows with empty or missing assistant completions.")
+
+        if truncated_answers > 0:
+            warnings.append(f"⚠️ {truncated_answers} sample(s) have truncated assistant answers due to max sequence length limit ({self.max_seq_len_threshold} tokens).")
+            recommendations.append(f"Consider increasing max_seq_len or pre-filtering prompts longer than {self.max_seq_len_threshold} tokens.")
 
         if loss_mask_misaligned > 0:
-            warnings.append(f"⚠️ {loss_mask_misaligned} samples have misaligned loss masks (unmasked prompt tokens or missing assistant targets).")
-            recommendations.append("Ensure DataCollatorForCompletionOnlyLM or labels = -100 is applied to prompt turns.")
+            warnings.append(f"❌ {loss_mask_misaligned} sample(s) have misaligned loss masks (unmasked prompt tokens or invalid custom labels).")
+            recommendations.append("Ensure answer-only loss masking (labels = -100 for prompt and pad tokens) is strictly enforced.")
 
         if duplicates > 0:
-            pct = (duplicates / len(samples)) * 100
-            warnings.append(f"⚠️ {duplicates} duplicate prompts detected ({pct:.1f}%).")
-            recommendations.append("Deduplicate dataset prompts to avoid over-fitting and biased gradient updates.")
+            pct = (duplicates / max(1, total_samples)) * 100
+            warnings.append(f"⚠️ {duplicates} duplicate prompt(s) detected ({pct:.1f}%).")
+            recommendations.append("Deduplicate dataset prompts to avoid memorization and skewed gradients.")
 
+        if length_exceeded > 0:
+            pct = (length_exceeded / max(1, total_samples)) * 100
+            warnings.append(f"⚠️ {length_exceeded} sample(s) ({pct:.1f}%) exceed the configured length limit ({self.max_seq_len_threshold} tokens).")
+            recommendations.append(f"Apply truncation policy or filter sequences exceeding {self.max_seq_len_threshold} tokens.")
+
+        if actual_pad_waste_pct > 20.0:
+            recommendations.append(
+                f"Collation Padding Advisory: {actual_pad_waste_pct:.1f}% zero-value padded tokens under sequential batching (B={bs}). "
+                "Apply TrainSight SequenceBinPacker to eliminate padding waste."
+            )
+
+        # Drift test
         ks_p = 1.0
-        js_div = 0.0
         drift_alert = False
-
-        if baseline_seq_lengths and len(baseline_seq_lengths) > 0:
+        if baseline_seq_lengths and len(baseline_seq_lengths) > 0 and total_lengths:
             try:
                 from scipy.stats import ks_2samp
-                stat, p_val = ks_2samp(seq_lengths, baseline_seq_lengths)
+                stat, p_val = ks_2samp(total_lengths, baseline_seq_lengths)
                 ks_p = float(p_val)
                 if ks_p < 0.05:
                     drift_alert = True
-                    warnings.append(f"⚠️ Dataset Drift Detected! (KS Test p-value = {ks_p:.4f} < 0.05). Prompt distribution shifted.")
-                    recommendations.append("Re-profile model max context limits and vLLM chunked prefill parameters.")
+                    warnings.append(f"⚠️ Dataset Drift Detected! (KS Test p-value = {ks_p:.4f} < 0.05). Length distribution shifted.")
+                    recommendations.append("Re-calibrate batch size and collation bounds against new length distribution.")
             except ImportError:
-                b_avg = float(np.mean(baseline_seq_lengths))
-                if abs(avg_len - b_avg) / max(1.0, b_avg) > 0.3:
-                    drift_alert = True
-                    ks_p = 0.001
-                    warnings.append(f"⚠️ Dataset Drift Detected! (Mean shift {abs(avg_len - b_avg):.1f} tokens). Prompt distribution shifted.")
-                    recommendations.append("Re-profile model max context limits and vLLM chunked prefill parameters.")
+                pass
+
+        # Phase Quadrant classification
+        if invalid_rows > 0 or empty_completions > 0 or loss_mask_misaligned > 0 or truncated_answers > 0:
+            phase_quadrant = "Validation Alerts Detected"
+        elif duplicates > 0 or length_exceeded > 0:
+            phase_quadrant = "Optimization Advisories"
+        else:
+            phase_quadrant = "Clean Execution"
+
+        # Collation recommendations
+        collation_dict = {
+            "batch_size": bs,
+            "sequential_padding_waste_pct": round(actual_pad_waste_pct, 2),
+            "total_useful_tokens": total_useful_tokens,
+            "total_padded_tokens": actual_padded_total,
+            "suggested_bin_packing": actual_pad_waste_pct > 20.0,
+        }
 
         return SFTReport(
-            total_samples=len(samples),
-            avg_seq_len=avg_len,
-            std_seq_len=std_len,
-            variance_ratio=var_ratio,
+            total_samples=total_samples,
+            valid_samples_count=valid_samples,
+            invalid_rows_count=invalid_rows,
+            empty_completion_count=empty_completions,
+            truncated_answers_count=truncated_answers,
+            loss_mask_misaligned_count=loss_mask_misaligned,
+            duplicate_count=duplicates,
+            length_exceeded_count=length_exceeded,
+            oom_risk_count=length_exceeded,
+            avg_seq_len=round(avg_len, 2),
+            std_seq_len=round(std_len, 2),
+            variance_ratio=round(var_ratio, 4),
             min_seq_len=min_len,
             max_seq_len=max_len,
-            p95_seq_len=p95_len,
-            p99_seq_len=p99_len,
-            oom_risk_count=oom_risk,
-            empty_completion_count=empty_completions,
-            duplicate_count=duplicates,
-            loss_mask_misaligned_count=loss_mask_misaligned,
+            p95_seq_len=round(p95_len, 2),
+            p99_seq_len=round(p99_len, 2),
+            avg_prompt_tokens=round(avg_p_len, 2),
+            avg_target_tokens=round(avg_t_len, 2),
+            batch_size=bs,
+            actual_batch_padding_waste_pct=round(actual_pad_waste_pct, 2),
+            predicted_padding_waste_pct=round(actual_pad_waste_pct, 2),
+            total_useful_tokens=total_useful_tokens,
+            total_padded_tokens=actual_padded_total,
             drift_alert=drift_alert,
-            ks_p_value=ks_p,
-            js_divergence=js_div,
-            predicted_padding_waste_pct=predicted_pad_waste,
-            phase_quadrant=quadrant,
-            seq_lengths=seq_lengths,
+            ks_p_value=round(ks_p, 4),
+            phase_quadrant=phase_quadrant,
+            seq_lengths=total_lengths,
+            collation=collation_dict,
             warnings=warnings,
             recommendations=recommendations,
         )

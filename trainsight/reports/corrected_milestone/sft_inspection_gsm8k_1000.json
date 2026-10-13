@@ -1,0 +1,38 @@
+{
+  "status": "verified_with_tokenizer",
+  "tokenizer_name": "Qwen/Qwen2.5-1.5B-Instruct",
+  "dataset_file": "trainsight/sample_data/real_gsm8k_1000.jsonl",
+  "inspection_summary": {
+    "total_samples": 1000,
+    "valid_samples_count": 1000,
+    "invalid_rows_count": 0,
+    "empty_completion_count": 0,
+    "truncated_answers_count": 0,
+    "loss_mask_misaligned_count": 0,
+    "duplicate_count": 0,
+    "length_exceeded_count": 0,
+    "avg_prompt_tokens": 88.49,
+    "avg_target_tokens": 122.01,
+    "avg_seq_len": 210.5,
+    "min_seq_len": 101,
+    "max_seq_len": 567,
+    "p95_seq_len": 334.0,
+    "p99_seq_len": 424.13,
+    "batch_size": 4,
+    "actual_batch_padding_waste_pct": 25.36,
+    "total_useful_tokens": 210498,
+    "total_padded_tokens": 282000,
+    "phase_quadrant": "Clean Execution",
+    "warnings": [
+      "\u2139\ufe0f Collation Padding: 25.4% zero-value padded tokens under sequential batching (B=4)."
+    ]
+  },
+  "alignment_verification": {
+    "total_rows_verified": 1000,
+    "prompt_prefix_masked_to_neg100": 1000,
+    "unmasked_prompt_violations": 0,
+    "unmasked_padding_violations": 0,
+    "total_active_target_tokens": 122011,
+    "collator_invariant_matches": true
+  }
+}

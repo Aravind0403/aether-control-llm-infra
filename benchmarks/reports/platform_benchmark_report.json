@@ -1,33 +1,39 @@
 {
-  "timestamp": 1791356783.425314,
+  "timestamp": 1791894425.006763,
   "mode": "analytical",
   "live_endpoint": null,
   "stages": {
     "stage_1_trainsight": {
       "meta_probe": {
-        "probe_latency_ms": 9.725,
+        "probe_latency_ms": 4.304,
         "probed_layer_mb": 89.26,
         "total_static_gb": 3.31,
         "sla_target_ms": 15.0,
         "status": "PASS"
       },
       "signature_cache": {
-        "hash_latency_ms": 0.409,
+        "hash_latency_ms": 0.447,
         "sla_target_ms": 10.0,
         "status": "PASS"
       },
       "bin_packing": {
         "total_sequences": 10,
         "num_batches": 5,
-        "waste_reduction_pct": 40.2,
-        "throughput_boost_pct": 81.0,
+        "packed_padded_tokens": 7820,
+        "baseline_padded_tokens": 10286.67,
+        "baseline_method": "exact_enumeration",
+        "padded_token_reduction_pct": 24.0,
+        "modeled_density_gain_pct": 31.5,
+        "throughput_boost_pct": 31.5,
+        "waste_reduction_pct": 24.0,
+        "superseded_heuristic_record": "-40.2pt waste (+81.0% heuristic gain)",
         "status": "PASS"
       }
     },
     "stage_2_rlhf": {
       "verifier_contract": {
         "pairs_tested": 15,
-        "latency_ms": 4.62,
+        "latency_ms": 1.02,
         "status": "PASS"
       },
       "radix_kv_deduplication": {
@@ -82,7 +88,7 @@
       },
       "semantic_oracle": {
         "anti_gaming_target": "70b_deep_lane",
-        "oracle_latency_ms": 0.064,
+        "oracle_latency_ms": 0.014,
         "status": "PASS"
       },
       "spot_handoff_timeline": {
@@ -103,7 +109,7 @@
       },
       "shared_memory_cache": {
         "storage_medium": "/dev/shm",
-        "read_latency_ms": 0.0007,
+        "read_latency_ms": 0.0008,
         "num_metrics_returned": 9,
         "is_driver_mutex_acquired": false,
         "status": "PASS"
@@ -111,7 +117,7 @@
       "kernel_xid_trap": {
         "xid_code": 45,
         "applied_node_taint": "node.kubernetes.io/unschedulable:NoSchedule",
-        "quarantine_latency_ms": 0.004,
+        "quarantine_latency_ms": 0.005,
         "zero_polling_overhead": true,
         "status": "PASS"
       }

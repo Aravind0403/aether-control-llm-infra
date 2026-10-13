@@ -14,6 +14,14 @@ docs/Production_Notes.md
 # Auto-generated runtime artifacts & training checkpoints
 checkpoints/
 **/checkpoints/
+checkpoint-*/
+**/checkpoint-*/
+*.pt
+*.pth
+*.bin
+*.safetensors
+model_output/*/
+!model_output/README.md
 results/
 **/results/
 

@@ -185,18 +185,19 @@ def profile(
         table.add_column("Status", style="bold")
 
         table.add_row("Total Samples", str(report.total_samples), "✅ OK")
-        table.add_row("Avg Sequence Length (μ)", f"{report.avg_seq_len:.1f} tokens", "ℹ️ Info")
-        table.add_row("Std Dev Length (σ)", f"{report.std_seq_len:.1f} tokens", "ℹ️ Info")
-        table.add_row("Variance Ratio (σ/μ)", f"{report.variance_ratio:.3f}", "⚠️ High Variance (>0.75)" if report.variance_ratio > 0.75 else "✅ Normal")
-        table.add_row("P95 Sequence Length", f"{report.p95_seq_len:.1f} tokens", "ℹ️ Info")
-        table.add_row("P99 Sequence Length", f"{report.p99_seq_len:.1f} tokens", "⚠️ Heavy Tail (>1000)" if report.p99_seq_len > 1000 else "✅ Normal")
-        table.add_row("Max Sequence Length", f"{report.max_seq_len} tokens", "❌ Too Long" if report.max_seq_len > max_seq_len else "✅ OK")
-        table.add_row("Predicted Padding Waste", f"{report.predicted_padding_waste_pct:.1f}%", "⚠️ High Waste (>30%)" if report.predicted_padding_waste_pct > 30 else "✅ Low Waste")
-        table.add_row("Two-Factor Phase Quadrant", report.phase_quadrant, "⚠️ Risk Detected" if report.phase_quadrant != "Clean Execution" else "✅ Clean")
-        table.add_row("OOM Risk Samples (>2048)", str(report.oom_risk_count), "❌ High Risk" if report.oom_risk_count > 0 else "✅ None")
+        table.add_row("Valid Training Samples", str(report.valid_samples_count), "✅ OK" if report.valid_samples_count == report.total_samples else "⚠️ Filter Needed")
+        table.add_row("Invalid Rows", str(report.invalid_rows_count), "❌ Corrupt" if report.invalid_rows_count > 0 else "✅ Clean")
+        table.add_row("Empty Assistant Targets", str(report.empty_completion_count), "❌ Missing Target" if report.empty_completion_count > 0 else "✅ Clean")
+        table.add_row("Truncated Answers", str(report.truncated_answers_count), "⚠️ Truncated" if report.truncated_answers_count > 0 else "✅ Full Context")
+        table.add_row("Loss Mask Misalignments", str(report.loss_mask_misaligned_count), "❌ Zero Target / Unmasked Prompt" if report.loss_mask_misaligned_count > 0 else "✅ Answer-Only Masked")
         table.add_row("Duplicate Prompts", str(report.duplicate_count), "⚠️ Duplicates" if report.duplicate_count > 0 else "✅ Clean")
-        table.add_row("Empty Completions", str(report.empty_completion_count), "❌ Corrupt" if report.empty_completion_count > 0 else "✅ Clean")
-        table.add_row("Loss Mask Misalignments", str(report.loss_mask_misaligned_count), "⚠️ Misaligned" if report.loss_mask_misaligned_count > 0 else "✅ Clean")
+        table.add_row("Length Threshold Violations", str(report.length_exceeded_count), "⚠️ Exceeds Limit" if report.length_exceeded_count > 0 else "✅ Within Limit")
+        table.add_row("Avg Sequence Length (μ)", f"{report.avg_seq_len:.1f} tokens", "ℹ️ Info")
+        table.add_row("Avg Prompt / Target Length", f"{report.avg_prompt_tokens:.1f} / {report.avg_target_tokens:.1f} tokens", "ℹ️ Answer-Only Breakdown")
+        table.add_row("P95 Sequence Length", f"{report.p95_seq_len:.1f} tokens", "ℹ️ Info")
+        table.add_row("Max Sequence Length", f"{report.max_seq_len} tokens", "⚠️ Tail Exceeded" if report.max_seq_len > max_seq_len else "✅ OK")
+        table.add_row("Sequential Batch Padding Waste", f"{report.actual_batch_padding_waste_pct:.1f}% (B={report.batch_size})", "⚠️ High Waste (>25%)" if report.actual_batch_padding_waste_pct > 25 else "✅ Low Waste")
+        table.add_row("Pre-Flight Quality Gate", report.phase_quadrant, "⚠️ Validation Alerts" if report.phase_quadrant != "Clean Execution" else "✅ Passed")
         if baseline:
             table.add_row("KS Test Drift p-value", f"{report.ks_p_value:.4f}", "⚠️ Drift Alert!" if report.drift_alert else "✅ No Drift")
 
@@ -327,9 +328,9 @@ def profile(
 
                 pack_panel = (
                     f"✅ Sequence Bin-Packing Index Generated: [bold white]{auto_pack.name}[/bold white]\n"
-                    f"• Padding waste reduced: {pack_res.original_padding_waste_pct:.1f}% ──► {pack_res.packed_padding_waste_pct:.1f}% "
-                    f"(-{pack_res.waste_reduction_pct:.1f}% waste eliminated)\n"
-                    f"• Estimated Training Speedup: [bold green]+{pack_res.estimated_throughput_gain_pct:.1f}% throughput[/bold green]\n"
+                    f"• Baseline Method: {pack_res.baseline_method} (Baseline: {pack_res.baseline_padded_tokens:,.1f} tokens ──► Packed: {pack_res.packed_padded_tokens:,} tokens)\n"
+                    f"• Padded Token Reduction: [bold green]-{pack_res.padded_token_reduction_pct:.1f}% padded tokens[/bold green]\n"
+                    f"• Modeled Useful-Token Density Gain: [bold green]+{pack_res.modeled_density_gain_pct:.1f}% modeled density[/bold green] (offline token metric; GPU training speed unmeasured)\n"
                     f"• Invariant-Preserving Hyperparameter Translation: per_device_train_batch_size={pack_res.recommended_per_device_batch_size}, "
                     f"gradient_accumulation_steps={pack_res.recommended_gradient_accumulation_steps}"
                 )
@@ -359,14 +360,17 @@ def profile(
             console.print(Panel("\n".join([f"• {r}" for r in report.recommendations]), title="[bold green]💡 Actionable Recommendations[/bold green]", border_style="green"))
             console.print()
 
-        if not report.warnings and mem_fits:
+        if not report.warnings and mem_fits and report.phase_quadrant == "Clean Execution":
             console.print("[bold green]✨ SFT Dataset passed all validation and runtime checks![/bold green]\n")
 
-        if strict and report.warnings:
+        if strict and (report.warnings or report.phase_quadrant != "Clean Execution"):
             raise typer.Exit(code=1)
 
     elif dataset_type.lower() == "dpo":
-        inspector = DPOInspector()
+        inspector = DPOInspector(
+            tokenizer_name=tokenizer or "Qwen/Qwen2.5-1.5B-Instruct",
+            strict=strict,
+        )
         report = inspector.inspect_file(dataset)
 
         table = Table(title="📊 DPO Preference Metrics Summary", border_style="dim")
@@ -375,17 +379,26 @@ def profile(
         table.add_column("Status", style="bold")
 
         table.add_row("Total Preference Pairs", str(report.total_samples), "✅ OK")
+        table.add_row("Avg Prompt Length", f"{report.avg_prompt_len:.1f} tokens", "ℹ️ Info")
         table.add_row("Avg Chosen Length", f"{report.avg_chosen_len:.1f} tokens", "ℹ️ Info")
-        table.add_row("Avg Rejected Length", f"{report.avg_rejected_len:.1f} tokens", "ℹ️ Info")
+        table.add_row("Avg Rejected (Candidate) Length", f"{report.avg_rejected_len:.1f} tokens", "ℹ️ Info")
         table.add_row("Length Bias Ratio (Chosen/Rejected)", f"{report.length_bias_ratio:.2f}", "⚠️ High Bias" if report.length_bias_ratio > 1.8 or report.length_bias_ratio < 0.55 else "✅ Balanced")
         table.add_row("Identical Pairs (Chosen == Rejected)", str(report.identical_pairs_count), "❌ Zero Gradient" if report.identical_pairs_count > 0 else "✅ None")
         table.add_row("Near-Identical Pairs (Sim > 90%)", str(report.near_identical_count), "⚠️ Low Margin" if report.near_identical_count > 0 else "✅ None")
         table.add_row("Preference Reversals (Chosen < Rejected)", str(report.preference_reversal_count), "❌ Inverted Ratings" if report.preference_reversal_count > 0 else "✅ None")
+        table.add_row("Score Ties (Equal Confidence)", str(report.score_tie_count), "ℹ️ Tied Ratings" if report.score_tie_count > 0 else "✅ Distinct")
+        table.add_row("Over-Budget Prompts (>1024)", str(report.over_budget_prompts_count), "ℹ️ Truncated by Policy" if report.over_budget_prompts_count > 0 else "✅ Within Budget")
+        table.add_row("Prompt Mismatches", str(report.prompt_mismatch_count), "❌ Prompt Mismatch" if report.prompt_mismatch_count > 0 else "✅ Aligned")
         table.add_row("Duplicate Prompts", str(report.duplicate_count), "⚠️ Duplicates" if report.duplicate_count > 0 else "✅ Clean")
         table.add_row("Missing Text Rows", str(report.empty_pair_count), "❌ Corrupt" if report.empty_pair_count > 0 else "✅ Clean")
+        table.add_row("Pre-Flight Quality Gate", report.phase_quadrant, "❌ Defects Detected" if report.phase_quadrant != "Clean Execution" else "✅ Passed")
 
         console.print(table)
         console.print()
+
+        if report.advisories:
+            console.print(Panel("\n".join(report.advisories), title="[bold blue]ℹ️ Informational Advisories[/bold blue]", border_style="blue"))
+            console.print()
 
         if report.warnings:
             console.print(Panel("\n".join(report.warnings), title="[bold yellow]⚠️ Detected Issues[/bold yellow]", border_style="yellow"))
@@ -395,14 +408,18 @@ def profile(
             console.print(Panel("\n".join([f"• {r}" for r in report.recommendations]), title="[bold green]💡 Actionable Recommendations[/bold green]", border_style="green"))
             console.print()
 
-        if not report.warnings:
+        if not report.warnings and report.phase_quadrant == "Clean Execution":
             console.print("[bold green]✨ DPO Dataset passed all validation checks![/bold green]\n")
 
-        if strict and report.warnings:
+        if strict and (report.warnings or report.phase_quadrant != "Clean Execution"):
             raise typer.Exit(code=1)
 
     else:
         console.print(f"[bold red]Dataset type '{dataset_type}' inspector coming up next![/bold red]")
+
+
+# Register inspect as alias for profile
+app.command("inspect")(profile)
 
 
 @app.command("fetch")

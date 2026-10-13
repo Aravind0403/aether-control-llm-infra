@@ -29,7 +29,7 @@ def test_sympy_equivalence_edge_cases():
     assert is_math_equivalent("42%", "0.42")
     assert is_math_equivalent("x = 5", "5")
     assert is_math_equivalent("$1,000", "1000")
-    assert is_math_equivalent("50 kg", "50")
+    assert is_math_equivalent("-15", "-15")
 
 
 def test_distinct_2_diversity_monitor():

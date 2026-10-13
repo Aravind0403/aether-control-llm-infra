@@ -1,207 +1,272 @@
-# AetherControl: Enterprise LLM Serving Platform, Control Plane & Post-Training Pipeline
+# Aether Control
 
-[![CI/CD Pipeline](https://github.com/Aravind0403/Building-and-Optimizing-Production-LLM-Serving-System/actions/workflows/ci.yml/badge.svg)](https://github.com/Aravind0403/Building-and-Optimizing-Production-LLM-Serving-System/actions/workflows/ci.yml)
-[![Tests Passing](https://img.shields.io/badge/tests-64%2F64%20passed%20(100%25%20CPU)-brightgreen)](https://github.com/Aravind0403/Building-and-Optimizing-Production-LLM-Serving-System)
-[![vLLM](https://img.shields.io/badge/vLLM-v0.7.2-blue)](https://vllm.ai)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.5.1%2Bcu124-EE4C2C)](https://pytorch.org)
-[![TRL GRPO](https://img.shields.io/badge/TRL-GRPOTrainer-yellow)](https://huggingface.co/docs/trl)
-[![RTX 4090 Silicon Verified](https://img.shields.io/badge/RTX%204090-1%2C141%20tok%2Fs-success)](https://github.com/Aravind0403/Building-and-Optimizing-Production-LLM-Serving-System)
-[![Status: Reference Architecture](https://img.shields.io/badge/status-Reference--Architecture-orange)](https://github.com/Aravind0403/Building-and-Optimizing-Production-LLM-Serving-System)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+**Validate training inputs. Control inference admission. Measure what actually happens.**
 
-**AetherControl** is a production-grade engineering control plane that bridges raw GPU execution realities (HBM memory bandwidth, CUDA kernels, driver mutex contention, and Nsight Systems traces) with post-training developer pipelines (pre-flight dataset inspection, vLLM serving, Kubernetes telemetry governance, and DeepSeek-R1 style GRPO reasoning alignment).
+Aether Control is an experimental ML systems platform spanning three parts of the LLM lifecycle:
+
+- **Inference serving:** a streaming admission gateway that manages concurrency, queueing, and overload.
+- **TrainSight:** preflight inspection of training data, tokenization, and loss boundaries, reconciled against the inputs consumed by the trainer.
+- **GRPO training:** an instrumented reinforcement-learning pipeline with numeric reward verification, rollout telemetry, and checkpoint evaluation.
+
+The project focuses on reproducible engineering evidence: explicit input contracts, real GPU execution, comparative experiments, and clearly scoped claims.
+
+**Status:** Research and engineering prototype. Core workflows have been exercised locally and on rented GPUs. Production reliability and customer adoption remain future milestones.
 
 ---
 
-## 🏛️ System Architecture & Defensive Fail-Fast Gates
+## Architecture
 
-AetherControl is engineered as a **defensive control plane**—it proactively intercepts anomalies, queue overloads, and hardware driver locks before they cascade into user-facing failures:
-
-```mermaid
-flowchart TD
-    subgraph Stage1["1. Data Engineering & Pre-Flight Guard (trainsight)"]
-        A[Raw JSONL / Parquet Stream] --> B{"TrainSight Meta-Probe<br/>& Signature Check"}
-        B -->|"❌ OOM Risk / σ/μ > 0.75"| C["HALT: Exit Code 1<br/>(Abort K8s Pod Boot)"]
-        B -->|"✅ Kernel Sanity (<15ms SLA)"| D["Greedy Bin-Packer<br/>(-40.2pt Padding Waste)"]
-    end
-
-    subgraph Stage2["2. Post-Training & Reasoning Alignment (rlhf-pipeline)"]
-        D --> E["DeepSeek-R1 Style GRPOTrainer<br/>(PEFT LoRA r=16, α=32)"]
-        E --> F{"Rule-Based Verifiers<br/>(Format + Accuracy)"}
-        F -->|"❌ Reward Hacking / Repetition"| G["Bayesian Penalty Engine<br/>(-0.56 Penalty)"]
-        F -->|"✅ CoT Tag & Math Ground Truth"| H["Group Relative Advantage Update<br/>(Batch Accuracy 20% ──► 70%)"]
-    end
-
-    subgraph Stage3["3. High-Throughput Inference Serving (vllm-engine)"]
-        H --> I["vLLM Engine (PagedAttention + Chunked Prefill)"]
-        I --> J{"CoDel Ingress Governor"}
-        I --> K{"Radix Tenant Quota"}
-        J -->|"❌ Queue Delay > 500ms"| L["HTTP 429 Retry-After<br/>(Load Shedding)"]
-        J -->|"✅ Latency SLA Met"| M["1,141.41 tokens/s Response<br/>(TTFT P50: 22.1ms)"]
-        K -->|"❌ Tenant Allocation > 15%"| N["Evict Low-Priority KV Blocks<br/>(Anti-Poisoning Ceiling)"]
-    end
-
-    subgraph Stage4["4. Kubernetes Telemetry & Fault Isolation (k8s-infra)"]
-        M --> O["GKE / Cloud GPU Nodes"]
-        O --> P{"Tiered DCGM Poller"}
-        P -->|"❌ Scrape Storm"| Q["Decouple 5s/15s Scrapes<br/>(-98.6% NVML Scrapes [Model])"]
-        O --> R{"Zero-Polling /dev/kmsg Trap"}
-        R -->|"❌ Critical XID 31/43/45/79"| S["Instant Node Taint / Quarantine<br/>(< 0.01ms /dev/kmsg Trap)"]
-    end
+```text
+                         Aether Control
+                               │
+           ┌───────────────────┼───────────────────┐
+           │                   │                   │
+    Inference Serving       TrainSight        GRPO Training
+           │                   │                   │
+    Streaming gateway     Dataset inspection   Model rollouts
+    Admission decisions   Tokenization checks  Reward verification
+    Bounded queue         Loss-mask checks     Group advantages
+    Cancellation cleanup  Trainer alignment    LoRA updates
+           │                   │                   │
+       vLLM backend       SFT / DPO trainers   Saved checkpoints
+           │                   │                   │
+           └───────────────────┼───────────────────┘
+                               │
+                  Reports and reproducible artifacts
 ```
 
----
-
-## 👥 Who This Is For
-
-| Audience | What They Get |
-| :--- | :--- |
-| **ML Engineers** | Production-grade vLLM serving pushing **1,141.41 tokens/s** with PagedAttention and Chunked Prefill on RTX 4090. |
-| **RL / AI Researchers** | DeepSeek-R1 style GRPOTrainer with deterministic math/format verifiers achieving **70% GSM8K training-batch accuracy** ($n=40$). |
-| **Infrastructure & Platform Teams** | DCGM telemetry governor decoupling query frequencies to yield **98.6% less NVML driver queries** (analytical model) and zero-polling kernel XID traps. |
-| **FinOps Teams** | **$0.08 – $0.10 per 1M tokens** raw compute rental economics (1.5B model @ 100% saturation on rented RTX 4090). |
-| **Open Source Developers** | **64/64 CPU-compatible unit tests**, 4-stage analytical benchmarks, and zero-hardware barrier to entry. |
+These are separate workflows within the repository. Their shared engineering approach is to make assumptions explicit and verify behavior at the execution boundary.
 
 ---
 
-## ⚡ Key Differentiators ("Why Not Just Use Vanilla vLLM?")
+## 1. Inference Serving
 
-| Capability | AetherControl Platform | Vanilla vLLM Baseline | Production Impact |
-| :--- | :--- | :--- | :--- |
-| **Pre-Flight OOM Prevention** | ✅ **TrainSight Meta-Probe** (Static geometry & σ/μ checks) | ❌ None (OOM crashes pod mid-job) | Catches static weight overflow & sequence variance before pod scheduling (does not bound dynamic KV-cache peaks) |
-| **Post-Training Alignment** | ✅ **Integrated GRPO Pipeline** (70% batch accuracy on 24GB GPUs) | ❌ None (Requires separate disparate framework) | Unified codebase from training to serving |
-| **Telemetry Mutex Contention**| ✅ **Tiered DCGM Governor** (5s/15s + `/dev/shm` cache) | ⚠️ 500ms raw NVML scrape storms | Analytical model: -98.6% NVML queries, locks P99 TTFT ceiling to 45ms |
-| **Hardware Fault Isolation** | ✅ **`/dev/kmsg` Kernel Trap** (XID trap in <0.01ms in-memory) | ❌ None (Broken pods stay in routing pool) | Zero black-hole traffic routing to failed GPUs |
-| **Burst Protection** | ✅ **CoDel Load Shedder & Model Cascading** (7B fast-lane) | ⚠️ Unbounded queues degrade all users | Graceful 429 shedding vs. cluster-wide cascading crash |
-| **Hardware Rental Economics** | ✅ **$0.08 – $0.10 per 1M tokens** (RTX 4090 @ $0.34/hr) | ⚠️ Variable | Raw compute cost for 1.5B model at 100% saturation (not comparable to commercial closed 70B+ APIs) |
+The admission gateway sits between clients and an OpenAI-compatible inference backend.
 
----
+It provides:
 
-## 📊 Live Silicon Telemetry Scorecard & Metric Provenance Registry
+- Streaming response forwarding.
+- Active-request concurrency limits.
+- Bounded queueing and deadline-based rejection.
+- HTTP 429 responses when admission limits are exceeded.
+- Client-disconnect handling and resource cleanup.
 
-Every latency, throughput, and efficiency metric in this repository is mapped to an explicit classification and reproduction path. See [`benchmarks/reproduce.md`](benchmarks/reproduce.md) for full hardware reproduction scripts, commands, and raw telemetry logs.
+The benchmark harness compares direct backend access, forwarding-only operation, a static concurrency cap, and bounded queue admission.
 
-### 1. Metric Classification & Provenance Registry
+### Comparative Serving Evaluation (Open-Loop Poisson Overload)
 
-| Claimed Metric | Classification | Implementation & Methodology | Source / Reproduction Reference |
-| :--- | :--- | :--- | :--- |
-| **1,141.41 tokens/s** | `[HARDWARE-MEASURED]` | Stock vLLM 0.7.2 benchmarked on RTX 4090 (`Qwen/Qwen2.5-1.5B-Instruct`, concurrency 8, 50 requests). Control plane proxy was not inline during this raw engine run. | [`live_silicon_execution.md`](benchmarks/reports/live_silicon_execution.md) · [`reproduce.md`](benchmarks/reproduce.md#1-live-stock-vllm-inference-sla-benchmark) |
-| **22.1 ms P50 TTFT** | `[HARDWARE-MEASURED]` | FlashAttention-2 prefill latency on RTX 4090 (vLLM 0.7.2, chunked prefill 2048). P99 (110.3ms) measured over $N=50$ requests. | [`live_silicon_execution.md`](benchmarks/reports/live_silicon_execution.md) · [`reproduce.md`](benchmarks/reproduce.md#1-live-stock-vllm-inference-sla-benchmark) |
-| **6.5 ms P50 TPOT** | `[HARDWARE-MEASURED]` | Autoregressive token decode latency bounded by RTX 4090 HBM bandwidth (886.1 GB/s). | [`live_silicon_execution.md`](benchmarks/reports/live_silicon_execution.md) · [`reproduce.md`](benchmarks/reproduce.md#1-live-stock-vllm-inference-sla-benchmark) |
-| **GRPO Reward (0.325 ──► 0.850)** | `[TRAINING-BATCH]` | 10-step HuggingFace TRL `GRPOTrainer` with PEFT LoRA ($r=16, \alpha=32$). Measures batch reward across 4 prompts/step ($n=40$ completions total). **Not a held-out test evaluation.** | [`grpo_trl_trainer.py`](rlhf-pipeline/rlhf_pipeline/grpo_trl_trainer.py) · [`reproduce.md`](benchmarks/reproduce.md#2-live-huggingface-trl-grpo-training-loop-smoke-test) |
-| **−98.6% Driver Mutex Contention** | `[ANALYTICAL MODEL]` | $\text{Reduction} = 1.0 - \frac{1,120\text{ queries/s}}{80,000\text{ queries/s}} = 98.6\%$. Models 800 theoretical GPUs comparing 500ms flat scraping vs tiered 5s/15s polling. No physical driver ioctl measured. | [`telemetry_governor.py`](k8s-infra/k8s_infra/telemetry_governor.py#L46-L82) · [`reproduce.md`](benchmarks/reproduce.md#2-complete-metric-provenance-registry) |
-| **45.0 ms P99 TTFT Lock** | `[ANALYTICAL MODEL]` | Formulaic queue scaling function estimating latency ceiling when driver lock contention is eliminated. | [`telemetry_governor.py`](k8s-infra/k8s_infra/telemetry_governor.py#L83-L97) |
-| **0.005 ms XID Trap Isolation** | `[MICRO-BENCHMARK]` | Python `re.search` execution time on a mock `/dev/kmsg` string. End-to-end K8s API patch + taint takes ~200ms–2s in production. | [`telemetry_governor.py`](k8s-infra/k8s_infra/telemetry_governor.py#L140-L170) |
-| **0.0007 ms /dev/shm Scrape Read** | `[MICRO-BENCHMARK]` | Python in-memory dictionary lookup time reading pre-parsed metrics from RAM. | [`telemetry_governor.py`](k8s-infra/k8s_infra/telemetry_governor.py#L105-L135) |
-| **40.2pt Padding Token Reduction** | `[SYNTHETIC MODEL]` | Heuristic padding reduction on synthetic set `[120, 240, 800, 1500, 300, 950, 450, 1800, 210, 650]`. Waste drops from 50.4% to 10.2% vs random order (+81.0% relative token efficiency). | [`bin_packer.py`](trainsight/trainsight/remediators/bin_packer.py#L50-L74) |
-| **Single-Layer Meta-Probe (7.34 ms)**| `[MICRO-BENCHMARK] (CPU/host-bound)` | Single-layer tensor geometry instantiation on `torch.device('meta')` executed on host CPU (4.04ms on Apple M-series host). Zero VRAM or CUDA kernels executed; timing reflects Python & transformers config initialization. SLA bound: 15.0ms. | [`meta_probe.py`](trainsight/trainsight/profilers/meta_probe.py) |
+Under an open-loop Poisson arrival workload exceeding the backend's concurrency ceiling, the gateway shapes traffic by shedding excess queue delay before it cascades into timeouts:
 
-### 2. High-Performance Serving SLA (`vllm-bench`)
-* **Environment**: Bare-metal Vast.ai `#50399758` (1x NVIDIA GeForce RTX 4090 24GB VRAM, AMD EPYC 7C13, CUDA 12.8, Driver 570.211.01).
-* **Workload**: Stock vLLM 0.7.2, `Qwen/Qwen2.5-1.5B-Instruct`, 50 requests, concurrency 8, max tokens 128 (control plane proxy was not inline during raw engine run).
+```text
+Mode                             Throughput    TTFT P50    TTFT P99    TPOT P99    E2E P99    429 Shed %    SLO (2s)
+--------------------------------------------------------------------------------------------------------------------
+Mode 1: Direct vLLM (Baseline)   48.2 tok/s     42.1 ms    812.4 ms     14.8 ms     3.85 s         0.0%       62.5%
+Mode 2: Forwarding Only          47.9 tok/s     43.2 ms    824.1 ms     15.0 ms     3.91 s         0.0%       61.0%
+Mode 3: Static Concurrency Cap   38.4 tok/s     38.5 ms    112.0 ms     12.1 ms     1.42 s        35.0%       98.0%
+Mode 4: Bounded Queue + Deadline 44.1 tok/s     39.8 ms    284.5 ms     13.2 ms     1.86 s        15.0%       95.0%
+```
 
-> ⚠️ **Sample Size Caveat ($N=50$)**: Latency percentiles ($P_{50}, P_{99}$) were measured on a short benchmark run of 50 total requests (`concurrency: 8`, `max_tokens: 128`). In an $N=50$ sample, $P_{99}$ is dominated by a single tail outlier ($1/50 = 2\%$). Production percentile validation requires sustained traces of $\ge 10,000$ requests under Poisson arrival distributions.
+**What this demonstrates:** how admission policies trade accepted work against latency under a specified workload.
 
-| Metric | Measured Silicon Telemetry | Production Target / SLA | Status |
-| :--- | :--- | :--- | :--- |
-| **Output Token Throughput** | **1,141.41 tokens/s** | > 800 tokens/s | ✅ **PASS** |
-| **Request Throughput** | **9.97 req/s** | > 5.0 req/s | ✅ **PASS** |
-| **TTFT (Prefill Latency) P50** | **22.1 ms** | < 50.0 ms | ✅ **PASS** |
-| **TTFT (Prefill Latency) P99** | **110.3 ms** *(Sample $N=50$)* | < 250.0 ms | ✅ **PASS** |
-| **TPOT (Decode Latency) P50** | **6.5 ms/token** | < 15.0 ms/token | ✅ **PASS** |
-| **TPOT (Decode Latency) P99** | **6.8 ms/token** *(Sample $N=50$)* | < 20.0 ms/token | ✅ **PASS** |
-| **E2E Request Latency P99** | **0.92 s** *(Sample $N=50$)* | < 2.0 s | ✅ **PASS** |
-| **Serving Reliability** | **50 / 50 (100.0%)** | 100% Zero-Drop | ✅ **PASS** |
-| **Hardware Rental Rate** | **$0.30 – $0.35 / hour** | Sub-$0.50 / hr | ✅ **PASS** |
-| **Hardware Cost per 1M Tokens**| **$0.08 – $0.10** | < $0.50 / 1M | ✅ **Spot Rental Model (1.5B @ 100% Saturation)** |
-
-### 3. Live HuggingFace TRL GRPO Post-Training Alignment (GSM8K)
-* **Workload**: 10-step distributed GRPO fine-tuning loop with PEFT LoRA ($r=16, \alpha=32$) on `Qwen2.5-1.5B-Instruct`.
-* **Scope**: Evaluates batch reward progress across 4 training batch prompts per step ($n=40$ completions total). **Not an evaluation on the 1,319 GSM8K held-out test split.**
-
-| Optimization Step | Combined Batch Reward | Training Batch Math Accuracy | Weighted Format Reward (0.0–0.50 scale)* | Training Loss |
-| :--- | :--- | :--- | :--- | :--- |
-| **Step 0 (Base Model)** | 0.000 | 42.0% | 0.000 (0% tag compliance) | 1.1934 |
-| **Step 5 (Mid-Training)** | 0.325 | 20.0% | 0.125 (25% tag compliance) | 0.0002 |
-| **Step 10 (Final Policy)**| **0.850 (+161%)** | **70.0% (+250%)** | **0.150 (30% tag compliance)** | **0.0004** |
-
-*\*Note on format reward scale: In `rlhf_pipeline/rewards/math_reward.py`, `format_weight = 0.50`. A mean batch score of 0.150 represents an average 30% full XML tag compliance across completions generated in that step, rather than 100% format consistency.*
+**Boundary:** admission control does not itself guarantee an end-to-end latency SLA or improve the backend’s token-generation speed.
 
 ---
 
-## 📦 Core Component Breakdown
+## 2. TrainSight
 
-| Module | Location | Primary CLI Command | Production Responsibilities | Unit Tests |
-| :--- | :--- | :--- | :--- | :--- |
-| **`trainsight`** | `trainsight/` | `trainsight profile` | Pre-flight dataset profiler & Kubernetes InitContainer guard. Features Two-Factor Law profiling ($\sigma/\mu$ & $P_{99}$), model-specific `--tokenizer` BPE counting, and fail-fast OOM risk alerts. | ✅ 16/16 Passed |
-| **`vllm-engine`** | `vllm-engine/` | `vllm-bench benchmark` | Production engine config manager & SLA streaming benchmark generator ($P_{50}/P_{99}$ TTFT, TPOT, RPS). Tunes Chunked Prefill, PagedAttention, and Prefix Caching. | ✅ 10/10 Passed |
-| **`rlhf-pipeline`** | `rlhf-pipeline/` | `rlhf-train train-steps` | DeepSeek-R1 style Group Relative Policy Optimization (GRPO) pipeline using HuggingFace `trl.GRPOTrainer`, PEFT LoRA, and deterministic math/format verifiers. | ✅ 31/31 Passed |
-| **`k8s-infra`** | `k8s-infra/` | `make cloud-up` | GKE Spot GPU cluster manifests, KEDA autoscaling, tiered DCGM exporter, `/dev/kmsg` zero-polling XID trap detector, and Prometheus/Grafana dashboards. | ✅ 7/7 Passed |
+TrainSight checks training inputs before GPU execution and verifies that inspection matches the training pipeline.
+
+### SFT inspection
+
+- Tokenizer-measured sequence lengths.
+- Answer-only loss masking.
+- Prompt and padding exclusion from the loss.
+- Empty-target, invalid-row, and truncation checks.
+- Fail-closed behavior when tokenization is unavailable.
+- Strict CLI quality gates.
+
+```text
+╭──────────────────────────── trainsight validator ────────────────────────────╮
+│ 🔍 Profiling dataset: real_gsm8k_1000.jsonl                                  │
+│ Type: SFT | Max Target Length: 1024 tokens                                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+                         📊 SFT Dataset Metrics Summary                         
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Metric                         ┃ Value              ┃ Status                 ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Total Samples                  │ 1,000              │ ✅ OK                  │
+│ Valid Training Samples         │ 1,000              │ ✅ OK                  │
+│ Invalid Rows                   │ 0                  │ ✅ Clean               │
+│ Empty Assistant Targets        │ 0                  │ ✅ Clean               │
+│ Truncated Answers              │ 0                  │ ✅ Full Context        │
+│ Loss Mask Misalignments        │ 0                  │ ✅ Answer-Only Masked  │
+│ Avg Sequence Length (μ)        │ 244.6 tokens       │ ℹ️ Info                │
+│ Avg Prompt / Target Length     │ 64.2 / 180.4 tok   │ ℹ️ Answer-Only Split   │
+│ P95 Sequence Length            │ 382.0 tokens       │ ℹ️ Info                │
+│ Max Sequence Length            │ 498 tokens         │ ✅ Within 1024 Limit   │
+│ Sequential Batch Padding Waste │ 24.0% (B=4)        │ ✅ Length-Group Ready  │
+│ Pre-Flight Quality Gate        │ Clean Execution    │ ✅ Passed              │
+└────────────────────────────────┴────────────────────┴────────────────────────┘
+✨ SFT Dataset passed all validation and runtime checks!
+```
+
+### Batching analysis
+
+TrainSight compares actual padded-token totals under random and length-grouped batching. Offline padding estimates are reported separately from measured GPU throughput and memory usage.
+
+### DPO inspection
+
+- Shared-prompt and preference-pair validation.
+- Identical-response, score-tie, and budget checks.
+- Explicit prompt and completion truncation policies.
+- Token and mask reconciliation against actual trainer batches.
+- Per-pair evaluation of policy/reference log-probabilities and reward margins.
+
+**What this demonstrates:** inspected data can be carried through a verified training-input contract.
+
+**Boundary:** valid inputs do not guarantee factual answers, improved model quality, or freedom from runtime memory failures.
 
 ---
 
-## 🚀 One-Command Execution & 5-Minute Quickstart
+## 3. GRPO Training
 
-You can validate every single layer of AetherControl **immediately on your local machine with zero GPU requirements**:
+The GRPO workflow connects real model generation to reward computation and LoRA training.
+
+It includes:
+
+- Numeric answer checking for a defined GSM8K-compatible contract.
+- Separate format and correctness rewards.
+- Group-relative advantage computation through TRL.
+- Reward, gradient, and adapter-update telemetry.
+- Checkpoint saving, reloading, and generation.
+- Before/after evaluation with saved per-example outputs.
+
+Simulation is explicitly separated from training. Training failures do not silently become synthetic success reports.
+
+**What this demonstrates:** a working reinforcement-learning execution path.
+
+**Boundary:** the small pilot does not establish a general improvement in mathematical reasoning.
+
+---
+
+## Experimental Evidence
+
+Results below apply to the stated configurations and workloads.
+
+| Experiment | Scope | Observation | Interpretation |
+|---|---|---|---|
+| **SFT batching** | Qwen2.5-1.5B, answer-only LoRA, 1,000 GSM8K examples, RTX 3090, five paired runs | 25.76% ± 0.45% fewer padded tokens; 29.28% ± 0.65% higher useful-input-token throughput | Measured performance benefit for this setup; no established peak-memory saving |
+| **DPO primary** | Qwen2.5-0.5B LoRA, 976 intact training pairs, 191 validation pairs | 120/191 positive implicit reward margins; mean DPO loss 0.6867 | Completed training under the corrected preprocessing contract |
+| **DPO sensitivity** | Added 16 prompt-truncated pairs and two optimizer updates | 116/191 positive margins; mean loss 0.6832 | Mixed results; does not establish that filtering improves training |
+| **GRPO pilot** | Qwen2.5-0.5B LoRA, RTX 4090, ten steps, 20 held-out questions | Correct-answer count changed from 6 to 8 (+2 correct answers, +10 percentage points); format compliance remained 0/20 | Exploratory observation, not a general reasoning-quality claim |
+
+- **SFT “±” values** denote sample standard deviations across five paired runs.
+- **DPO implicit reward accuracy** measures relative policy/reference likelihood changes. It is not open-ended answer accuracy.
+- **The GRPO evaluation** uses a 20-example held-out subset of the local GSM8K training-data sample (rows 0..19), not the official GSM8K test benchmark. Zero format compliance means the intended output-format behavior was not demonstrated by the greedy policy.
+
+Detailed experimental reports and raw metrics:
+- [SFT Batching Report](docs/reports/sft_batching_report.md) · [Raw JSON](benchmarks/reports/gpu_paired_training_answer_only_report.json)
+- [DPO Primary & Sensitivity Report](docs/reports/dpo_primary_and_sensitivity_gpu_report.md) · [Per-Pair Log-Prob Reconciliation](docs/reports/dpo_per_pair_reconciliation_report.md)
+- [GRPO GPU Smoke & Pilot Report](docs/reports/grpo_gpu_smoke_and_pilot_report.md) · [Pilot Raw JSON](rlhf-pipeline/reports/grpo_pilot_1791891388.json)
+
+---
+
+## Installation & Quickstarts
+
+### Installation
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/Aravind0403/Building-and-Optimizing-Production-LLM-Serving-System.git
-cd Building-and-Optimizing-Production-LLM-Serving-System
+# Clone repository
+git clone https://github.com/Aravind0403/Building-and-Optimizing-Production-LLM-Serving-System.git aether-control
+cd aether-control
 
-# 2. Run all 64 Unit Tests (100% CPU-compatible, runs in < 15 seconds)
-make test
+# Set up isolated Python environment
+python3 -m venv .venv
+source .venv/bin/activate
 
-# 3. Execute Unified 4-Stage Platform Benchmark Suite (Analytical Mode)
-make benchmark
-
-# 4. (Optional) Run Live Benchmark against a Running vLLM Cluster
-make benchmark-live ENDPOINT="http://localhost:8000"
+# Install editable packages
+pip install --upgrade pip
+pip install -e trainsight/
+pip install -e vllm-engine/
+pip install -e rlhf-pipeline/
 ```
 
-### 💻 Apple Silicon M1/M2/M3 (16GB Unified Memory) Demo (`demo/run_gsm8k_grpo_mps.py`)
-
-Run the full 3-step pipeline (TrainSight Profiling $\to$ GRPO Alignment $\to$ Before/After Evaluation) on any 16GB Mac in **< 15 minutes**:
+### Quickstart 1: Inference Serving (Admission Gateway & Benchmark)
 
 ```bash
-python3 demo/run_gsm8k_grpo_mps.py --samples 1000 --steps 50
+# Terminal 1: Launch local streaming mock backend
+vllm-bench mock-server --port 8000
+
+# Terminal 2: Launch Aether Admission Gateway in bounded-queue mode
+vllm-bench gateway --port 8001 --backend http://localhost:8000 --mode bounded_queue --concurrency 4 --max-queue 16 --deadline-ms 400
+
+# Terminal 3: Run 4-mode comparative SLA benchmark
+vllm-bench compare --backend http://localhost:8000 --num-requests 30 --rps 10.0
 ```
 
-#### 🏆 Side-by-Side Model Inference Comparison ("The Money Shot")
+### Quickstart 2: TrainSight (Data Preflight & Tokenization Gate)
 
-| Test Case / Metric | **Base Qwen2.5-1.5B (Before Alignment)** | **AetherControl Aligned (After Alignment)** |
-| :--- | :--- | :--- |
-| **Julie's Book (120p)** | `The answer is 15.` ❌ *(Incorrect, no reasoning)* | `<think>`<br>1. Today read $12 \times 2 = 24$ pages.<br>2. Total read = $12 + 24 = 36$ pages.<br>3. Remaining = $120 - 36 = 84$ pages.<br>4. Half remaining = $84 / 2 = 42$ pages.<br>`</think>`<br>`<answer>42</answer>` ✨ *(Correct CoT)* |
-| **Natalia's Clips (48)** | `Natalia sold 60 clips.` ❌ *(Incorrect, no reasoning)* | `<think>`<br>1. April sales = $48$ clips.<br>2. May sales = $48 / 2 = 24$ clips.<br>3. Total sales = $48 + 24 = 72$ clips.<br>`</think>`<br>`<answer>72</answer>` ✨ *(Correct CoT)* |
-| **Reasoning Structure** | ❌ None (Direct unstructured text) | ✅ Step-by-step CoT inside `<think>` |
-| **Format Tag Match (2 Demo Prompts)** | **0.0%** | **100.0% (Binary regex match on demo prompts; distinct from GRPO scalar reward scale)** |
-| **Math Accuracy (GSM8K Training Batch)** | **42.0%** | **70.0% (Prompt batch accuracy, $n=40$; not held-out test split)** |
-| **Automated Verifier Score**| **0.0 / 1.5** | **1.5 / 1.5 (PERFECT SCORE)** |
+```bash
+# Profile SFT data with exact Qwen BPE tokenization and answer-only loss masking
+trainsight inspect --dataset trainsight/sample_data/sample_gsm8k.jsonl --type sft --tokenizer Qwen/Qwen2.5-0.5B-Instruct
 
----
+# Profile DPO preference pairs with boundary and budget validation
+trainsight inspect --dataset trainsight/sample_data/sample_ultrafeedback.jsonl --type dpo --tokenizer Qwen/Qwen2.5-0.5B-Instruct
+```
 
-## 🔗 HuggingFace Ecosystem Artifacts
+### Quickstart 3: GRPO Training (Verifier Tests & Smoke Execution)
 
-All model weights and dataset snapshots are published to the HuggingFace Hub:
+```bash
+# Run unit test suite for GSM8K answer contract and runtime caps
+pytest rlhf-pipeline/tests/test_gsm8k_contract.py
 
-| Artifact | Link | Purpose |
-| :--- | :--- | :--- |
-| 🧠 **Fine-Tuned Model** | [AetherControl-Qwen2.5-1.5B-GRPO-Math](https://huggingface.co/Aravind0495/AetherControl-Qwen2.5-1.5B-GRPO-Math) | GRPO-aligned math reasoning model & training card |
-| 📦 **Sanitized Dataset** | [AetherControl-GSM8K-Sanitized](https://huggingface.co/datasets/Aravind0495/AetherControl-GSM8K-Sanitized) | TrainSight-validated GSM8K subset (1,000 rows) |
-| 🚀 **Local Interactive Demo** | [space/app.py](space/app.py) | Local Gradio App for data validation, SLA inference, and GRPO telemetry |
+# Run local/GPU 2-step GRPO smoke test with live rollout verification
+python benchmarks/run_grpo_experiment.py --smoke --steps 2 --train-samples 4 --skip-train 20 --eval-samples 4 --skip-eval 0
+```
 
 ---
 
-## 🔬 Silicon Profiling & Roofline Mechanics
+## Reproducibility
 
-* **NVIDIA Nsight Systems (`nsys`):** Documents microsecond timeline trace breakdowns separating compute-bound `flash_attn` kernels from memory-bound sampling.
-* **Roofline Model:** Quantifies the transition between:
-  - **Prefill Phase (Compute-Bound):** $\mathcal{O}(N^2 \cdot d)$ FLOPs saturating GPU Tensor Cores.
-  - **Decode Phase (Memory-Bandwidth-Bound):** $\mathcal{O}(N \cdot d)$ HBM reads bounded by 886.1 GB/s (RTX 4090) or 2.0 TB/s (A100).
-* **Failure Experiments ([docs/experiments.md](docs/experiments.md)):** Validates degradation under VRAM pressure (`gpu_memory_utilization: 0.40`), 8K prompt context scaling, HBM saturation, Head-of-Line blocking, and spot preemption storms.
+Each experiment in this repository is accompanied by:
+
+- Dataset identity, revision, selected rows, and split definitions.
+- Model and tokenizer revisions.
+- Dependency versions and hardware configuration.
+- Training, generation, and preprocessing settings.
+- Initialization and sampling seeds.
+- Raw measurements and per-example evaluation outputs.
+- Checkpoint locations and instructions for reproducing the run.
+
+Mock-server tests, real GPU measurements, and exploratory model-quality results are labeled separately. Historical results produced by superseded calculations or preprocessing paths are retained only as explicitly marked legacy artifacts.
 
 ---
 
-## 📜 License
-MIT License
+## What This Project Demonstrates
 
+- Asynchronous streaming and request lifecycle management.
+- Overload control and workload-driven benchmarking.
+- Tokenization, collation, and loss-mask correctness.
+- SFT, DPO, and GRPO training integration.
+- Paired experiments and per-example metric reconciliation.
+- Investigation of discrepancies between reported metrics and actual execution.
+
+---
+
+## Current Limitations
+
+- No production deployment or sustained reliability claim.
+- No demonstrated distributed KV-cache or prefill/decode orchestration layer.
+- No established general benefit from DPO filtering.
+- No established general reasoning improvement from the GRPO pilot.
+- Limited model, dataset, and hardware coverage.
+- Final GRPO audit items remain open until the parameter-distance calculation, answer extraction, and oversized-input behavior are reconciled.
+
+---
+
+## Next Milestones
+
+1. Close the remaining audit items and publish reproducible experiment artifacts.
+2. Provide one documented demonstration for each pillar.
+3. Evaluate a focused workflow with an external engineering team.
+4. Expand experiments where a specific adoption or performance claim requires more evidence.

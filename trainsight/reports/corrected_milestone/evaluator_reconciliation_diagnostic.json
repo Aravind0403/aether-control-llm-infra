@@ -1,0 +1,36 @@
+{
+  "train_pairs_audited": 976,
+  "eval_pairs_audited": 191,
+  "check1_status": "PASSED_100_PERCENT_BITWISE",
+  "evaluator_reconciliation": {
+    "num_pairs": 191,
+    "pol_c_diff": {
+      "mean": 0.009155965483313456,
+      "max": 0.0423583984375
+    },
+    "pol_r_diff": {
+      "mean": 0.007817811405783548,
+      "max": 0.053466796875
+    },
+    "ref_c_diff": {
+      "mean": 0.009189269149490677,
+      "max": 0.0426025390625
+    },
+    "ref_r_diff": {
+      "mean": 0.007845985522757027,
+      "max": 0.0537109375
+    },
+    "margin_diff": {
+      "mean": 4.602083204928474e-06,
+      "max": 4.2724609375002776e-05
+    },
+    "loss_diff": {
+      "mean": 2.3077295712775585e-06,
+      "max": 2.1696090698242188e-05
+    },
+    "sign_disagreements_count": 0,
+    "sign_disagreements": [],
+    "trl_positive_margin_count": 98,
+    "custom_positive_margin_count": 98
+  }
+}

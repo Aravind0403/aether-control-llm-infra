@@ -55,12 +55,20 @@ def is_math_equivalent(pred: str, target: str) -> bool:
     return False
 
 
+from rlhf_pipeline.rewards.gsm8k_contract import (
+    verify_gsm8k_accuracy,
+    verify_format_compliance,
+    extract_answer_content,
+)
+
+
 class GRPOReasoningReward:
     """Rule-based reward evaluator for DeepSeek-R1 style reasoning models (GSM8K/MATH).
     
-    Hardened with RFC-004:
-    - Zero-Bloat Verifier Contract (<5ms self-test on boot)
-    - SymPy Symbolic Canonicalization
+    Hardened with narrow answer-checking contract:
+    - Bounded execution time (pure regex & Decimal/Fraction arithmetic)
+    - Strict <think>...</think><answer>...</answer> formatting
+    - Strict numeric equivalence without loose unit stripping
     """
 
     def __init__(
@@ -81,32 +89,19 @@ class GRPOReasoningReward:
     def extract_reasoning_and_answer(self, completion: str) -> Tuple[str, str, bool]:
         """Extracts text inside <think>...</think> and <answer>...</answer> tags."""
         think_match = re.search(r"<think>(.*?)</think>", completion, re.DOTALL)
-        answer_match = re.search(r"<answer>(.*?)</answer>", completion, re.DOTALL)
-
+        answer_text = extract_answer_content(completion) or ""
         think_text = think_match.group(1).strip() if think_match else ""
-        answer_text = answer_match.group(1).strip() if answer_match else ""
-
-        # Format is valid if both think and answer tags exist in proper order
-        format_valid = bool(think_match and answer_match and think_match.start() < answer_match.start())
+        format_valid = verify_format_compliance(completion)
         return think_text, answer_text, format_valid
 
     def evaluate_format_reward(self, completion: str) -> float:
-        """Returns format reward (+0.5 if valid <think>/<answer> tags exist, 0.0 otherwise)."""
-        _, _, format_valid = self.extract_reasoning_and_answer(completion)
-        return self.format_weight if format_valid else 0.0
+        """Returns format reward (+0.5 if valid <think>/<answer> tags exist in proper order, 0.0 otherwise)."""
+        return self.format_weight if verify_format_compliance(completion) else 0.0
 
     def evaluate_accuracy_reward(self, completion: str, ground_truth: str) -> float:
-        """Returns accuracy reward (+1.0 if extracted answer matches ground truth via SymPy)."""
-        _, extracted_answer, _ = self.extract_reasoning_and_answer(completion)
-
-        # Fallback: if no <answer> tag, search for trailing numbers
-        if not extracted_answer:
-            numbers = re.findall(r"[-+]?\d*\.\d+|\d+", completion)
-            extracted_answer = numbers[-1] if numbers else ""
-
-        if is_math_equivalent(extracted_answer, ground_truth):
+        """Returns accuracy reward (+1.0 if extracted answer matches ground truth under narrow contract)."""
+        if verify_gsm8k_accuracy(completion, ground_truth):
             return self.accuracy_weight
-
         return 0.0
 
     def compute_total_reward(self, completion: str, ground_truth: str) -> Dict[str, float]:
