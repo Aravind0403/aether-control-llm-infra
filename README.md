@@ -177,7 +177,7 @@ Detailed experimental reports and raw metrics:
 
 ```bash
 # Clone repository
-git clone https://github.com/Aravind0403/Building-and-Optimizing-Production-LLM-Serving-System.git aether-control
+git clone https://github.com/Aravind0403/aether-control-llm-infra.git aether-control
 cd aether-control
 
 # Set up isolated Python environment
