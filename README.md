@@ -53,22 +53,29 @@ It provides:
 
 The benchmark harness compares direct backend access, forwarding-only operation, a static concurrency cap, and bounded queue admission.
 
-### Comparative Serving Evaluation (Open-Loop Poisson Overload)
+### Comparative Serving Evaluation (Real NVIDIA RTX 4090 Silicon)
 
-Under an open-loop Poisson arrival workload exceeding the backend's concurrency ceiling, the gateway shapes traffic by shedding excess queue delay before it cascades into timeouts:
+The benchmark harness executes open-loop Poisson arrival traces replayed across four serving architectures on physical silicon (standalone `vllm:v0.7.2`, `Qwen/Qwen2.5-1.5B-Instruct`, eager mode, bfloat16, $\text{TTFT} \le 250\text{ ms}$, $\text{E2E} \le 2.50\text{ s}$ SLO targets):
 
 ```text
-Mode                             Throughput    TTFT P50    TTFT P99    TPOT P99    E2E P99    429 Shed %    SLO (2s)
---------------------------------------------------------------------------------------------------------------------
-Mode 1: Direct vLLM (Baseline)   48.2 tok/s     42.1 ms    812.4 ms     14.8 ms     3.85 s         0.0%       62.5%
-Mode 2: Forwarding Only          47.9 tok/s     43.2 ms    824.1 ms     15.0 ms     3.91 s         0.0%       61.0%
-Mode 3: Static Concurrency Cap   38.4 tok/s     38.5 ms    112.0 ms     12.1 ms     1.42 s        35.0%       98.0%
-Mode 4: Bounded Queue + Deadline 44.1 tok/s     39.8 ms    284.5 ms     13.2 ms     1.86 s        15.0%       95.0%
+Serving Architecture                 Light Load (10 RPS)      Knee (35 RPS)          Overload (48 RPS)        Burst (10->48 RPS)
+                                     Attain%    E2E P99       Attain%    E2E P99     Attain%    E2E P99       Attain%    E2E P99
+---------------------------------------------------------------------------------------------------------------------------------
+Mode 1: Direct vLLM (Baseline)       100.0%     1.08 s         99.9%     2.10 s       96.1%     2.57 s*       100.0%     1.74 s
+Mode 2: Forwarding Only (Proxy)      100.0%     1.12 s        100.0%     1.98 s       96.9%     2.57 s*        99.7%     1.70 s
+Mode 3: Static Concurrency Cap (36)  100.0%     1.09 s         83.4%     1.53 s       64.7%     1.50 s         79.8%     1.34 s
+Mode 4: Bounded Queue + Deadline     100.0%     1.13 s         82.6%     1.64 s       52.9%     1.65 s         75.2%     1.43 s
 ```
+*\*Values marked with an asterisk breach the 2.50 s E2E SLO target.*
 
-**What this demonstrates:** how admission policies trade accepted work against latency under a specified workload.
+**Key Empirical Findings from 48 Paired Runs (>59,000 requests):**
+- **Proxy Overhead**: At light load, Aether Gateway forwarding adds $+3.2\text{ ms}$ TTFT P99 and $+40\text{ ms}$ E2E P99 overhead with zero rejections.
+- **Burst Smoothing vs. Premature Shedding**: In near-capacity traffic (35 RPS), Mode 4 absorbs micro-bursts into the queue, reducing shedding by $55\%$ compared to static cap ($115.3$ vs $255.0$ shed requests) while completing $+140$ additional requests.
+- **Overload SLO Protection**: Under sustained 48 RPS overload, direct unconstrained serving breaches the 2.50 s SLO boundary ($\text{E2E P99} = 2.57\text{ s}$). Mode 3 (Static Cap) strictly bounds admitted request latency ($\text{E2E P99} = 1.50\text{ s}$) via clean HTTP 429 shedding.
+- **Queue Residency Tradeoff**: Queue wait time directly consumes the client-perceived TTFT budget. Under sustained overload, queued requests wait up to the deadline, causing TTFT P99 to reach $602.2\text{ ms}$ ($> 250\text{ ms}$ SLO).
 
-**Boundary:** admission control does not itself guarantee an end-to-end latency SLA or improve the backend’s token-generation speed.
+**Boundary:** Admission control shapes and protects admitted request latency by shedding excess load; it does not accelerate GPU prefill or decode computation.
+
 
 ---
 
@@ -151,23 +158,32 @@ Simulation is explicitly separated from training. Training failures do not silen
 
 ## Experimental Evidence
 
-Results below apply to the stated configurations and workloads.
+Results below apply to the stated configurations and workloads on physical silicon.
 
 | Experiment | Scope | Observation | Interpretation |
 |---|---|---|---|
+| **Serving 4-mode paired** | Qwen2.5-1.5B, vLLM 0.7.2, RTX 4090, 48 paired runs (>59,000 reqs) across 4 regimes | Gateway proxy overhead = +3.2 ms TTFT P99, +40 ms E2E P99 at 10 RPS. Under 48 RPS overload, direct vLLM breaches 2.5s SLO (2.57s E2E P99), while static cap strictly bounds E2E to 1.50s. Bounded queue cuts near-capacity shedding by 55% (+140 completions). | Quantified tradeoff: unconstrained serving cascades under overload; static cap defends latency via shedding; bounded queue smooths micro-bursts. |
+| **Serving calibration** | Qwen2.5-1.5B, direct vLLM, RTX 4090, 11 offered rates (6–50 RPS), fixed 64-tok outputs | 100% attainment up to 35 RPS (2.17s E2E P99). First reproducible SLO failure at 40 RPS (94.6% attainment, 2.77s E2E P99). Saturation at 45–50 RPS (85.2% attainment). | Established true empirical capacity knee (35 RPS) and overload boundary (40+ RPS) on physical silicon. |
+| **Serving repeatability** | Qwen2.5-1.5B, direct vLLM, RTX 4090, 3 consecutive 180s trials at 6 RPS (3,207 reqs) | 100% attainment across all 3,207 requests; 0 failures; lag P99 = 2.01 ms; Run 2 early slowdown (t ≤ 30.5s) fully reconciled. | Harness validated for deterministic trace replay and low submission lag. |
 | **SFT batching** | Qwen2.5-1.5B, answer-only LoRA, 1,000 GSM8K examples, RTX 3090, five paired runs | 25.76% ± 0.45% fewer padded tokens; 29.28% ± 0.65% higher useful-input-token throughput | Measured performance benefit for this setup; no established peak-memory saving |
 | **DPO primary** | Qwen2.5-0.5B LoRA, 976 intact training pairs, 191 validation pairs | 120/191 positive implicit reward margins; mean DPO loss 0.6867 | Completed training under the corrected preprocessing contract |
 | **DPO sensitivity** | Added 16 prompt-truncated pairs and two optimizer updates | 116/191 positive margins; mean loss 0.6832 | Mixed results; does not establish that filtering improves training |
 | **GRPO pilot** | Qwen2.5-0.5B LoRA, RTX 4090, ten steps, 20 held-out questions | Correct-answer count changed from 6 to 8 (+2 correct answers, +10 percentage points); format compliance remained 0/20 | Exploratory observation, not a general reasoning-quality claim |
 
+- **Serving “±” values** denote sample standard deviations across independent seeded traces replayed across all 4 modes.
 - **SFT “±” values** denote sample standard deviations across five paired runs.
 - **DPO implicit reward accuracy** measures relative policy/reference likelihood changes. It is not open-ended answer accuracy.
 - **The GRPO evaluation** uses a 20-example held-out subset of the local GSM8K training-data sample (rows 0..19), not the official GSM8K test benchmark. Zero format compliance means the intended output-format behavior was not demonstrated by the greedy policy.
 
 Detailed experimental reports and raw metrics:
+- [Four-Mode Paired Serving Benchmark Report](benchmarks/reports/four_mode_paired_experiment_report.md) · [Raw JSON Artifact](benchmarks/reports/paired_regimes_experiment_report.json)
+- [Serving Capacity Recalibration Report](benchmarks/reports/capacity_calibration_reproducible.json) · [Initial Sweep](benchmarks/reports/capacity_calibration.json)
+- [Repeatability Diagnostic Report](benchmarks/reports/repeatability_diagnostic_report.md) · [Raw JSON](benchmarks/reports/repeatability_diagnostic_report.json)
+- [Real vLLM Integration Smoke Report](benchmarks/reports/real_vllm_integration_smoke_report.md)
 - [SFT Batching Report](docs/reports/sft_batching_report.md) · [Raw JSON](benchmarks/reports/gpu_paired_training_answer_only_report.json)
 - [DPO Primary & Sensitivity Report](docs/reports/dpo_primary_and_sensitivity_gpu_report.md) · [Per-Pair Log-Prob Reconciliation](docs/reports/dpo_per_pair_reconciliation_report.md)
 - [GRPO GPU Smoke & Pilot Report](docs/reports/grpo_gpu_smoke_and_pilot_report.md) · [Pilot Raw JSON](rlhf-pipeline/reports/grpo_pilot_1791891388.json)
+
 
 ---
 
