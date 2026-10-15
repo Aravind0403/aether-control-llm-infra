@@ -74,7 +74,7 @@ async def test_smoke_test_and_paired_experiment_mock():
 
 
 @pytest.mark.asyncio
-async def test_open_loop_capacity_calibration_and_four_mode_pilot_mock():
+async def test_open_loop_capacity_calibration_and_four_mode_pilot_mock(tmp_path):
     from vllm_engine.benchmarks.calibrate_capacity import run_capacity_calibration
     from vllm_engine.benchmarks.pilot_four_modes import run_pilot
 
@@ -88,7 +88,8 @@ async def test_open_loop_capacity_calibration_and_four_mode_pilot_mock():
     backend_url = f"http://127.0.0.1:{port}"
 
     try:
-        # Test capacity calibration
+        # Test capacity calibration with isolated tmp_path
+        calib_out = tmp_path / "calib.json"
         calib = await run_capacity_calibration(
             backend_url=backend_url,
             model_name="mock-model",
@@ -97,11 +98,13 @@ async def test_open_loop_capacity_calibration_and_four_mode_pilot_mock():
             max_tokens=8,
             ttft_target_s=0.5,
             e2e_target_s=1.0,
+            output_path=calib_out,
         )
         assert "calibrated_capacity_rps" in calib
         assert len(calib["records"]) == 2
 
-        # Test 4-mode pilot
+        # Test 4-mode pilot with isolated tmp_path
+        pilot_out = tmp_path / "pilot.json"
         gw_port = find_free_port()
         pilot = await run_pilot(
             backend_url=backend_url,
@@ -112,6 +115,7 @@ async def test_open_loop_capacity_calibration_and_four_mode_pilot_mock():
             ttft_target_s=0.5,
             e2e_target_s=1.0,
             gateway_port=gw_port,
+            output_path=pilot_out,
         )
         assert len(pilot["modes"]) == 4
         for label, m in pilot["modes"].items():
@@ -125,7 +129,7 @@ async def test_open_loop_capacity_calibration_and_four_mode_pilot_mock():
 
 
 @pytest.mark.asyncio
-async def test_repeatability_diagnostic_mock():
+async def test_repeatability_diagnostic_mock(tmp_path):
     from vllm_engine.benchmarks.run_repeatability_diagnostic import run_repeatability_diagnostic
 
     mock_app = create_mock_vllm_app()
@@ -138,6 +142,7 @@ async def test_repeatability_diagnostic_mock():
     backend_url = f"http://127.0.0.1:{port}"
 
     try:
+        diag_out = tmp_path / "diag.json"
         diag = await run_repeatability_diagnostic(
             backend_url=backend_url,
             model_name="mock-model",
@@ -149,6 +154,7 @@ async def test_repeatability_diagnostic_mock():
             ttft_target_s=0.5,
             e2e_target_s=1.0,
             cooldown_s=0.1,
+            output_path=diag_out,
         )
         assert diag["num_runs"] == 2
         assert len(diag["trials"]) == 2
@@ -162,3 +168,4 @@ async def test_repeatability_diagnostic_mock():
     finally:
         server.should_exit = True
         await task
+

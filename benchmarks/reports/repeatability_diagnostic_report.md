@@ -14,14 +14,16 @@
 
 ## 1. Executive Summary & Diagnostic Criterion
 
+> **Headline Finding**: The corrected harness completed three repeatability trials at 6 RPS with all 3,207 requests meeting the declared latency targets; an early-run latency slowdown remains unexplained.
+
 The diagnostic protocol was conducted to evaluate whether standalone vLLM serving exhibits reproducible behavior and explainable outliers under an identical Poisson arrival schedule, resolving earlier harness measurement instability before running multi-mode comparative experiments.
 
 ### Diagnostic Outcome: **PASS**
-- **Goodput Consistency**: $5.939 \pm 0.000\text{ RPS}$ across all 3 trials ($1,069 / 180.0\text{ s}$).
+- **Goodput Consistency**: $5.939 \pm 0.000\text{ RPS}$ across all 3 trials ($1,069 / 180.0\text{ s}$). *(Note: Zero goodput variance across the three runs is an expected mathematical consequence of identical offered request counts, the identical fixed 180.0-second denominator, and 100% attainment. Latency distributions still varied across runs).*
 - **Completion Rate**: Exactly $1,069 / 1,069$ requests completed successfully per trial ($3,207 / 3,207$ overall, $0$ failures, $0$ dropped connections).
 - **Attainment Rate**: $100.0\% \pm 0.0\%$ across all 3 trials against the target SLOs ($\text{TTFT} \le 250\text{ ms}$, $\text{E2E} \le 2.50\text{ s}$).
 - **Harness Client Lag**: Submission lag P50 $= 0.65\text{ ms}$, P99 $= 2.01\text{ ms}$ (eliminating client-side event loop contention).
-- **Outlier Explainability**: The tail latency elevation observed in Run 2 was isolated to a discrete 30-second window at the start of the trial ($t \in [0.4\text{ s}, 30.5\text{ s}]$), driven by an engine/GPU decode step slowdown (TPOT $\approx 30\text{ ms}$ vs. steady-state $16.3\text{ ms}$), while client dispatch lag remained $< 1.2\text{ ms}$.
+- **Outlier Breakdown**: An early-run latency elevation in Run 2 was isolated to a discrete window at the start of the trial ($t \le 30.5\text{ s}$), driven by an engine/GPU decode step slowdown (TPOT $\approx 30.8\text{ ms}$ vs. steady-state $16.3\text{ ms}$), while client dispatch lag remained $< 1.2\text{ ms}$.
 
 ---
 
@@ -62,33 +64,37 @@ Each trial replayed the identical 1,069-request schedule over $180.0\text{ s}$, 
 
 ---
 
-## 4. In-Depth Analysis of Run 2 Latency Tail
+## 4. In-Depth Analysis & Request Reconciliation of Run 2 Latency Tail
 
 While Runs 1 and 3 exhibited near-identical distributions (E2E P99 of $1.18\text{ s}$ and $1.16\text{ s}$, TTFT P99 of $34.6\text{ ms}$ and $34.4\text{ ms}$), Run 2 showed an elevated E2E P99 of $2.20\text{ s}$ and TTFT P99 of $63.9\text{ ms}$.
 
-Inspection of the per-request audit logs (`raw_records`) revealed:
-1. **Temporal Clustering**:
-   - Exactly 186 requests in Run 2 had an E2E latency exceeding $1.5\text{ s}$.
-   - All 186 slow requests occurred strictly within the first 30.5 seconds of the run: $\text{scheduled\_time} \in [0.40\text{ s}, 30.52\text{ s}]$.
-   - Zero requests exceeded $1.5\text{ s}$ after $t = 30.52\text{ s}$.
-2. **Decode Step Slowdown (TPOT)**:
-   - During $t \in [0.4\text{ s}, 30.5\text{ s}]$, Time Per Output Token (TPOT) averaged $30.8\text{ ms/token}$, resulting in $64 \times 30.8\text{ ms} \approx 1.97\text{ s}$ generation time.
-   - After $t = 35.0\text{ s}$ ($N = 849$ requests), TPOT dropped immediately to a mean of $16.31\text{ ms/token}$ (P50: $16.17\text{ ms}$, P99: $18.59\text{ ms}$).
-   - E2E latency for the remainder of Run 2 was P50: $1.048\text{ s}$, P99: $1.201\text{ s}$—matching Runs 1 and 3.
-3. **Client Submission Lag Independence**:
-   - During the slow 30-second window, submission lag was $0.90\text{--}1.20\text{ ms}$, demonstrating that the load generator dispatched requests on schedule and the delay was entirely server/hardware side.
-4. **Physical Root Cause**:
-   - The sudden 2x step change in token generation rate ($30.8\text{ ms} \to 16.3\text{ ms}$) at $t = 30.5\text{ s}$ without changes in concurrency points to GPU clock frequency ramping / power state (P-state) transitions after the inter-trial idle cooldown, or host hypervisor context switching on the shared rented hardware.
+Inspection and exact reconciliation of the per-request audit logs (`raw_records`) across the 1,069 requests in Run 2 establishes the following discrete phases:
+
+### Request Reconciliation ($N = 1,069$)
+1. **Early Slowdown Interval ($t \le 30.50\text{ s}$)**: **189 requests**
+   - 186 requests had $\text{E2E} > 1.5\text{ s}$ (ranging $1.51\text{--}2.20\text{ s}$).
+   - 3 requests finished just under the threshold ($1.35\text{--}1.48\text{ s}$).
+   - Time Per Output Token (TPOT) averaged $30.8\text{ ms/token}$, resulting in $64 \times 30.8\text{ ms} \approx 1.97\text{ s}$ generation time.
+2. **Transition Recovery Interval ($30.50\text{ s} < t \le 35.00\text{ s}$)**: **31 requests**
+   - Generation speed progressively accelerated: TPOT ranged from $22.5\text{ ms}$ down to $17.1\text{ ms/token}$ (mean $18.7\text{ ms}$).
+   - End-to-end latency ranged from $1.11\text{ s}$ to $1.47\text{ s}$ (mean $1.21\text{ s}$).
+3. **Steady-State Interval ($t > 35.00\text{ s}$)**: **849 requests**
+   - TPOT averaged $16.31\text{ ms/token}$ (P50: $16.17\text{ ms}$, P99: $18.59\text{ ms}$).
+   - E2E latency returned to steady-state baseline: P50 $= 1.048\text{ s}$, P99 $= 1.201\text{ s}$—matching Runs 1 and 3.
+- **Sum**: $189 + 31 + 849 = \mathbf{1,069\text{ requests}}$ (100% reconciled).
+
+### Causal Assessment: Early-Run Backend Slowdown of Unresolved Cause
+- **Client Dispatch Ruled Out**: Submission lag during the entire early interval was strictly $0.90\text{--}1.20\text{ ms}$, ruling out client-side load generator delay.
+- **Unconfirmed Backend Mechanism**: Without synchronous hardware telemetry (sampling GPU core clocks, power states via NVML) or engine internals profiling during the trial, attributing the slowdown specifically to GPU clock ramp-up (P-state transition) or hypervisor scheduling remains a working hypothesis. It is formally classified as an **early-run backend slowdown of unresolved cause**.
 
 ---
 
 ## 5. Conclusions & Next Steps
 
-1. **Repeatability Established**: Direct vLLM serving under identical Poisson schedules achieves deterministic throughput ($5.94\text{ RPS}$) and stable steady-state latency ($1.03\text{ s}$ P50, $1.17\text{ s}$ P99, $16.3\text{ ms}$ TPOT).
-2. **Attainment Feasibility**: Under light load (6 RPS), standalone vLLM easily satisfies $2.50\text{ s}$ E2E and $250\text{ ms}$ TTFT across all 3,207 requests, even during transient GPU warmup phases.
-3. **Readiness for 4-Mode Evaluation**: The experimental foundation is now solid. Comparative benchmarks across:
-   - Mode 1: Direct vLLM (Unconstrained)
-   - Mode 2: Aether Gateway (Forwarding Only)
-   - Mode 3: Aether Gateway (Admission Control with tuned queue deadline)
-   - Mode 4: Ray Serve (Production External Baseline)
-   can now be executed across varied load regimes (light, capacity knee, overload, burst) with confidence in measurement fidelity.
+1. **Harness Repeatability Verified**: Direct vLLM serving under identical Poisson schedules achieves deterministic throughput ($5.94\text{ RPS}$) and stable steady-state latency ($1.03\text{ s}$ P50, $1.17\text{ s}$ P99, $16.3\text{ ms}$ TPOT).
+2. **100% Target Attainment**: Under 6 RPS, standalone vLLM easily satisfies $2.50\text{ s}$ E2E and $250\text{ ms}$ TTFT across all 3,207 requests, despite the transient early slowdown in Run 2.
+3. **Protocol for Next Phase**:
+   - **Active Warm-up**: Enforce a standardized active warm-up request burst before every measured trial (and after any idle cooldown) outside the evaluation window.
+   - **Load Recalibration**: Treat previously proposed load labels (e.g. 10 RPS as "near capacity", 14–16 RPS as "overload") as uncalibrated candidates. Execute a corrected calibration sweep at candidate rates (e.g. 6, 10, 14, 18 RPS) with fixed windows to locate the true empirical saturation boundary.
+   - **Continuous Telemetry**: Continuously log GPU clocks, power, and utilization during runs to correlate any future backend latency anomalies with physical silicon behavior.
+
