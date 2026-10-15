@@ -94,6 +94,7 @@ async def run_repeatability_diagnostic(
     cooldown_s: float = 15.0,
     trace_seed: int = 42,
     workload_path: Optional[Path] = None,
+    output_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Runs 3 repeated trials replaying the identical 180s arrival trace to diagnose stability."""
     # 1. Generate frozen prompt distribution
@@ -262,7 +263,7 @@ async def run_repeatability_diagnostic(
         "trials": trial_records,
     }
 
-    out_file = Path("benchmarks/reports/repeatability_diagnostic_report.json")
+    out_file = output_path or Path("benchmarks/reports/repeatability_diagnostic_report.json")
     out_file.parent.mkdir(parents=True, exist_ok=True)
     with open(out_file, "w") as f:
         json.dump(report_payload, f, indent=2)

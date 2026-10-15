@@ -45,6 +45,7 @@ async def run_pilot(
     max_queue: int = 16,
     deadline_ms: float = 400.0,
     gateway_port: int = 8080,
+    output_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Runs a 4-mode pilot evaluation to validate benchmark harness and metrics accounting."""
     # Prepare frozen prompt distribution
@@ -186,7 +187,7 @@ async def run_pilot(
     console.print(f"\n[bold]Measured Gateway Forwarding Latency Delta (Mode 2 vs Mode 1 TTFT P50):[/bold] [yellow]{ttft_delta_ms:+.2f} ms[/yellow]\n")
 
     # Save pilot report artifact
-    out_path = Path("benchmarks/reports/pilot_four_modes_report.json")
+    out_path = output_path or Path("benchmarks/reports/pilot_four_modes_report.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     report_dict = {
         "timestamp": time.time(),
