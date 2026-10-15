@@ -151,7 +151,7 @@ class ServingBenchmarkRunner:
 
         offered_count = len(results)
         admitted_count = offered_count - len(shed_429)
-        failed_count = len(results) - len(completed)
+        failed_count = len(truncated) + len(errored) + len(cancelled) + len(unfinished)
 
         window_duration = measurement_window_s if measurement_window_s and measurement_window_s > 0 else total_duration_s
 
