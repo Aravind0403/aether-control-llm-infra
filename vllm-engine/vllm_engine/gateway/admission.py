@@ -137,6 +137,7 @@ class BoundedQueueController:
 
         # Request entered waiting queue; wait for semaphore slot with deadline
         in_queue = True
+        slot_acquired = False
         try:
             try:
                 await asyncio.wait_for(self._semaphore.acquire(), timeout=self.deadline_s)
@@ -156,6 +157,7 @@ class BoundedQueueController:
                     in_queue = False
                 self._active_count += 1
                 self.total_admitted += 1
+                slot_acquired = True
 
             queue_wait_ms = (time.perf_counter() - arrival_t) * 1000.0
             return queue_wait_ms
@@ -164,6 +166,8 @@ class BoundedQueueController:
             raise
         except BaseException:
             # Handles CancelledError and any unexpected exception
+            if slot_acquired:
+                self.release_slot()
             async with self._lock:
                 if in_queue:
                     self._queued_count = max(0, self._queued_count - 1)
