@@ -9,17 +9,22 @@
 
 ---
 
+> [!NOTE]
+> Latency figures reported below are smoke-test functional observations to confirm end-to-end completion, not a gateway overhead benchmark. Output token lengths varied across prompts, and the SSH tunnel between the local test client and the rented GPU cloud instance introduced network latency.
+
+---
+
 ## 🔬 Test Suite Execution Results
 
 ### 1. Direct & Proxied Request Lifecycle
-| Mode | Request Type | Status | Latency | Tokens | Terminal Usage Checked |
+| Mode | Request Type | Status | Latency | Tokens | Terminal Usage & Completion |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Direct vLLM** | Non-Streaming (Unary) | **PASS** | 821.6 ms | 2 | Yes |
-| **Direct vLLM** | Streaming (SSE) | **PASS** | 585.2 ms | 10 | Yes (`include_usage`) |
-| **Aether Gateway** | Non-Streaming (Unary) | **PASS** | 777.0 ms | 4 | Yes (`X-Aether-Admission: ADMIT`) |
-| **Aether Gateway** | Streaming (SSE) | **PASS** | 696.4 ms | Verified | Yes (Delimited SSE + `[DONE]`) |
+| **Direct vLLM** | Non-Streaming (Unary) | **PASS** | 821.6 ms | 2 | `usage` payload asserted (`prompt_tokens`, `completion_tokens`, `total_tokens`) |
+| **Direct vLLM** | Streaming (SSE) | **PASS** | 585.2 ms | 10 | Terminal usage chunk verified via `stream_options.include_usage=True` |
+| **Aether Gateway** | Non-Streaming (Unary) | **PASS** | 777.0 ms | 4 | `X-Aether-Admission: ADMIT` & `usage` fields asserted |
+| **Aether Gateway** | Streaming (SSE) | **PASS** | 696.4 ms | Verified | Reassembled multi-chunk SSE deltas & terminal `data: [DONE]` verified |
 
-*Gateway active & queued slots strictly returned to `0` after all requests completed.*
+*Gateway active and queued slots strictly returned to `0` after all requests completed.*
 
 ---
 
@@ -35,19 +40,26 @@
 ---
 
 ### 3. Client Cancellation & Slot Recovery
-- **Active Stream Cancellation**: Client aborted connection mid-stream. Upstream request aborted, execution slot released immediately (`active_requests == 0`).
-- **Queued Request Cancellation**: Client cancelled task while waiting in queue. Queue depth returned immediately from `1` to `0`.
-- **Verdict**: **100% Slot Leak-Free**.
+- **Active Stream Cancellation**: Client disconnected during active generation. Gateway aborted upstream HTTP request handling and released the admission slot immediately (`active_requests == 0`). *(Note: Gateway slot recovery establishes gateway cleanup; backend engine-level token abortion was not separately verified via backend logs/metrics in this smoke test).*
+- **Queued Request Cancellation**: Client cancelled task while waiting in admission queue. Queue depth returned immediately from `1` to `0`.
+- **Verdict**: **No slot leaks observed in the tested scenarios.**
 
 ---
 
 ### 4. Backend Failure & Resumption
 - **Process Termination**: Simulated backend crash by issuing `SIGKILL` to remote vLLM process during active streaming.
-- **Gateway Response**: Gateway cleanly terminated the in-flight stream, prevented hangs, and restored admission counters to `0`.
-- **Backend Recovery**: Re-launched vLLM engine, confirmed `/health` returned HTTP 200, and verified subsequent requests succeeded with zero dropped connections.
-- **Verdict**: **Resilient Failover & Recovery Confirmed**.
+- **Gateway Response**: Gateway cleanly terminated the in-flight stream without deadlocking and restored admission counters to `0`.
+- **Backend Recovery**: Re-launched vLLM engine, confirmed `/health` returned HTTP 200, and verified subsequent requests succeeded cleanly (`'BACKEND ALIVE'`).
+- **Verdict**: **Backend interruption and recovery after restart verified.**
+
+---
+
+### 5. Evidence & Environmental Persistence
+- **Environment Provenance**: Verified exact Git commit SHA (`d1e95f2`), vLLM version (0.7.2), model repository (`Qwen/Qwen2.5-1.5B-Instruct`), driver (`590.48.01`), CUDA version (13.1), and physical GPU silicon (RTX 4090 24GB).
+- **Teardown**: Vast.ai instance `56094123` verified destroyed post-test, preventing cloud resource/credit leaks.
+- **Verdict**: **Evidence captured and environment cleanly decommissioned.**
 
 ---
 
 ## 🏁 Summary Verdict: ALL 5 STEPS PASSED
-The Aether Admission Gateway request lifecycle, slot release guarantees, client cancellation handling, and SSE stream parsing have been verified live against real vLLM 0.7.2 on physical NVIDIA GeForce RTX 4090 hardware.
+The Aether Admission Gateway request lifecycle, slot release guarantees, client cancellation handling, and SSE stream parsing have been verified live against real vLLM 0.7.2 on physical NVIDIA GeForce RTX 4090 hardware across all five integration checks.
