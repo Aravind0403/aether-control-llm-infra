@@ -31,6 +31,27 @@ class RequestBenchmarkResult:
     prompt_tokens: int = 0
     completion_tokens: int = 0
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "prompt_len": self.prompt_len,
+            "output_len": self.output_len,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "success": self.success,
+            "status_code": self.status_code,
+            "stream_status": self.stream_status,
+            "scheduled_time_s": self.scheduled_time,
+            "start_time_s": self.start_time,
+            "submission_lag_ms": self.submission_lag_ms,
+            "ttft_ms": self.ttft * 1000.0 if self.ttft > 0 else 0.0,
+            "tpot_ms": self.tpot * 1000.0 if self.tpot > 0 else 0.0,
+            "e2e_latency_s": self.e2e_latency,
+            "queue_time_ms": self.queue_time_ms,
+            "is_shed_429": self.is_shed_429,
+            "is_truncated": self.is_truncated,
+            "error_message": self.error_message,
+        }
+
 
 @dataclass
 class BenchmarkSummary:
@@ -90,6 +111,7 @@ class BenchmarkSummary:
     arrival_window_s: float = 0.0
     goodput_rps: float = 0.0
     goodput_attainment_pct: float = 0.0
+    raw_records: List[Dict[str, Any]] = field(default_factory=list)
 
     # Backward compatibility fields
     token_jitter_p50_ms: Optional[float] = None
@@ -237,4 +259,5 @@ class ServingBenchmarkRunner:
             arrival_window_s=win_arrival,
             goodput_rps=goodput_rps,
             goodput_attainment_pct=goodput_attainment,
+            raw_records=[r.to_dict() for r in results],
         )

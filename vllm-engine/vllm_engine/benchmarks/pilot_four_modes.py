@@ -55,9 +55,19 @@ async def run_pilot(
 
     test_prompts = [prompts[i % len(prompts)] for i in range(requests_per_mode)]
 
+    # Pre-generate deterministic shared arrival schedule with fixed seed
+    from vllm_engine.benchmarks.load_generator import generate_poisson_arrival_schedule
+    shared_arrival_schedule = generate_poisson_arrival_schedule(
+        num_requests=requests_per_mode,
+        target_rps=target_rps,
+        seed=42,
+    )
+    arrival_window_s = shared_arrival_schedule[-1] - shared_arrival_schedule[0] if len(shared_arrival_schedule) > 1 else 1.0
+
     console.print(f"\n[bold cyan]🚀 Initiating 4-Mode Serving Pilot Experiment...[/bold cyan]")
     console.print(f"Backend: [yellow]{backend_url}[/yellow] | Model: [yellow]{model_name}[/yellow]")
     console.print(f"Offered Load: {target_rps:.1f} RPS | Requests/Mode: {requests_per_mode}")
+    console.print(f"Shared Arrival Window: {arrival_window_s:.3f}s (Deterministic Seed: 42)")
     console.print(f"Targets: TTFT <= {ttft_target_s*1000:.0f}ms | E2E <= {e2e_target_s:.2f}s\n")
 
     runner = ServingBenchmarkRunner(
@@ -101,8 +111,9 @@ async def run_pilot(
                 prompts=test_prompts,
                 target_rps=target_rps,
                 max_tokens=max_tokens,
+                arrival_schedule=shared_arrival_schedule,
             )
-            summary = runner.summarize_results(raw_res, duration)
+            summary = runner.summarize_results(raw_res, duration, arrival_window_s=arrival_window_s)
         else:
             # Modes 2, 3, 4: Ephemeral Gateway
             extra = kwargs or {}
@@ -122,8 +133,9 @@ async def run_pilot(
                     prompts=test_prompts,
                     target_rps=target_rps,
                     max_tokens=max_tokens,
+                    arrival_schedule=shared_arrival_schedule,
                 )
-                summary = runner.summarize_results(raw_res, duration)
+                summary = runner.summarize_results(raw_res, duration, arrival_window_s=arrival_window_s)
 
         # Assert full request accounting
         accounted = summary.completed_requests + summary.shed_requests_429 + summary.failed_requests
@@ -182,6 +194,7 @@ async def run_pilot(
         "requests_per_mode": requests_per_mode,
         "ttft_target_s": ttft_target_s,
         "e2e_target_s": e2e_target_s,
+        "shared_arrival_window_s": arrival_window_s,
         "gateway_forwarding_delta_p50_ms": ttft_delta_ms,
         "modes": {
             label: {
@@ -195,6 +208,7 @@ async def run_pilot(
                 "e2e_p99_s": s.e2e_p99,
                 "goodput_rps": s.goodput_rps,
                 "goodput_attainment_pct": s.goodput_attainment_pct,
+                "raw_records": s.raw_records,
             }
             for label, s in pilot_results.items()
         },

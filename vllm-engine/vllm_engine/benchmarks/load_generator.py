@@ -52,18 +52,24 @@ def load_dataset_prompts(dataset_path: Path, max_samples: int = 100) -> List[str
     return prompts if prompts else generate_synthetic_prompts(max_samples)
 
 
-def generate_poisson_arrival_schedule(num_requests: int, target_rps: float) -> List[float]:
+def generate_poisson_arrival_schedule(
+    num_requests: int,
+    target_rps: float,
+    seed: Optional[int] = None,
+) -> List[float]:
     """Generates an open-loop arrival schedule (seconds from benchmark t=0) following a Poisson process.
     
     If target_rps <= 0, dispatches all requests simultaneously at t=0 (burst).
     Otherwise, inter-arrival times are drawn from an exponential distribution with mean 1/target_rps.
+    Uses default_rng(seed) when seed is provided for reproducible paired traces.
     """
     if num_requests <= 0:
         return []
     if target_rps <= 0:
         return [0.0] * num_requests
 
-    inter_arrivals = np.random.exponential(scale=1.0 / target_rps, size=num_requests)
+    rng = np.random.default_rng(seed)
+    inter_arrivals = rng.exponential(scale=1.0 / target_rps, size=num_requests)
     inter_arrivals[0] = 0.0
     arrival_times = np.cumsum(inter_arrivals).tolist()
     return arrival_times
@@ -234,6 +240,7 @@ async def async_send_streaming_request(
     model_name: str,
     prompt: Union[str, List[Dict[str, str]]],
     max_tokens: int = 128,
+    min_tokens: Optional[int] = None,
     cancel_after_s: Optional[float] = None,
     scheduled_time: float = 0.0,
     submission_lag_ms: float = 0.0,
@@ -247,8 +254,10 @@ async def async_send_streaming_request(
         "max_tokens": max_tokens,
         "stream": True,
         "stream_options": {"include_usage": True},
-        "temperature": 0.0
+        "temperature": 0.0,
     }
+    if min_tokens is not None:
+        payload["min_tokens"] = min_tokens
 
     start_time = time.perf_counter()
     first_event_time: float = 0.0
@@ -426,16 +435,22 @@ async def run_open_loop_poisson_benchmark(
     prompts: Union[List[str], List[Dict[str, Any]]],
     target_rps: float,
     max_tokens: int = 128,
+    min_tokens: Optional[int] = None,
     timeout_s: float = 60.0,
     client: Optional[httpx.AsyncClient] = None,
+    arrival_schedule: Optional[List[float]] = None,
+    seed: Optional[int] = None,
 ) -> Tuple[List[RequestBenchmarkResult], float]:
     """Executes an open-loop benchmark following a Poisson arrival schedule.
     
     Requests are fired at predetermined timestamps regardless of whether earlier
     requests have completed, avoiding closed-loop concurrency throttling.
     Accurately measures submission lag to verify client-side queue health.
+    Accepts an explicit arrival_schedule or seed for strict paired trace replay.
     """
-    arrival_schedule = generate_poisson_arrival_schedule(len(prompts), target_rps)
+    if arrival_schedule is None:
+        arrival_schedule = generate_poisson_arrival_schedule(len(prompts), target_rps, seed=seed)
+
     start_bench_time = time.perf_counter()
     results: List[Optional[RequestBenchmarkResult]] = [None] * len(prompts)
 
@@ -461,9 +476,11 @@ async def run_open_loop_poisson_benchmark(
             if isinstance(item, dict):
                 req_prompt = item.get("messages") or item.get("prompt")
                 req_max_tokens = item.get("max_tokens", max_tokens)
+                req_min_tokens = item.get("min_tokens", min_tokens)
             else:
                 req_prompt = item
                 req_max_tokens = max_tokens
+                req_min_tokens = min_tokens
 
             res = await async_send_streaming_request(
                 client=client,
@@ -471,6 +488,7 @@ async def run_open_loop_poisson_benchmark(
                 model_name=model_name,
                 prompt=req_prompt,
                 max_tokens=req_max_tokens,
+                min_tokens=req_min_tokens,
                 scheduled_time=scheduled_target_offset,
                 submission_lag_ms=submission_lag_ms,
             )
