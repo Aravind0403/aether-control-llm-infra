@@ -122,3 +122,43 @@ async def test_open_loop_capacity_calibration_and_four_mode_pilot_mock():
     finally:
         server.should_exit = True
         await task
+
+
+@pytest.mark.asyncio
+async def test_repeatability_diagnostic_mock():
+    from vllm_engine.benchmarks.run_repeatability_diagnostic import run_repeatability_diagnostic
+
+    mock_app = create_mock_vllm_app()
+    port = find_free_port()
+    config = uvicorn.Config(app=mock_app, host="127.0.0.1", port=port, log_level="error", access_log=False)
+    server = uvicorn.Server(config)
+    task = asyncio.create_task(server.serve())
+
+    await asyncio.sleep(0.1)
+    backend_url = f"http://127.0.0.1:{port}"
+
+    try:
+        diag = await run_repeatability_diagnostic(
+            backend_url=backend_url,
+            model_name="mock-model",
+            window_duration_s=2.0,
+            target_rps=5.0,
+            num_runs=2,
+            max_tokens=8,
+            min_tokens=8,
+            ttft_target_s=0.5,
+            e2e_target_s=1.0,
+            cooldown_s=0.1,
+        )
+        assert diag["num_runs"] == 2
+        assert len(diag["trials"]) == 2
+        for t in diag["trials"]:
+            assert t["completed"] == t["offered"]
+            assert len(t["raw_records"]) == t["completed"]
+            r0 = t["raw_records"][0]
+            assert "e2e_from_schedule_s" in r0
+            assert "e2e_from_dispatch_s" in r0
+            assert "submission_lag_ms" in r0
+    finally:
+        server.should_exit = True
+        await task

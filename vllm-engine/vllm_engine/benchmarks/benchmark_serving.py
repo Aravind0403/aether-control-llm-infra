@@ -17,9 +17,13 @@ class RequestBenchmarkResult:
     start_time: float = 0.0          # Actual client dispatch timestamp (perf_counter)
     scheduled_time: float = 0.0      # Planned arrival schedule timestamp
     submission_lag_ms: float = 0.0   # (start_time - scheduled_time) * 1000.0 (client pool queue lag)
-    ttft: float = 0.0                # Time To First Content Event (seconds)
+    ttft: float = 0.0                # Time To First Content Event from dispatch (seconds)
     tpot: float = 0.0                # Mean Time Per Content Event (seconds)
-    e2e_latency: float = 0.0         # End to End Latency (seconds)
+    e2e_latency: float = 0.0         # End to End Latency from dispatch (seconds)
+    e2e_from_schedule_s: float = 0.0 # Latency from scheduled arrival to completion (seconds)
+    e2e_from_dispatch_s: float = 0.0 # Latency from actual client dispatch to completion (seconds)
+    ttft_from_schedule_s: float = 0.0 # TTFT from scheduled arrival (seconds)
+    ttft_from_dispatch_s: float = 0.0 # TTFT from actual client dispatch (seconds)
     status_code: int = 200
     is_shed_429: bool = False
     is_cancelled: bool = False
@@ -44,8 +48,12 @@ class RequestBenchmarkResult:
             "start_time_s": self.start_time,
             "submission_lag_ms": self.submission_lag_ms,
             "ttft_ms": self.ttft * 1000.0 if self.ttft > 0 else 0.0,
+            "ttft_from_schedule_ms": self.ttft_from_schedule_s * 1000.0 if self.ttft_from_schedule_s > 0 else 0.0,
+            "ttft_from_dispatch_ms": self.ttft_from_dispatch_s * 1000.0 if self.ttft_from_dispatch_s > 0 else 0.0,
             "tpot_ms": self.tpot * 1000.0 if self.tpot > 0 else 0.0,
             "e2e_latency_s": self.e2e_latency,
+            "e2e_from_schedule_s": self.e2e_from_schedule_s,
+            "e2e_from_dispatch_s": self.e2e_from_dispatch_s,
             "queue_time_ms": self.queue_time_ms,
             "is_shed_429": self.is_shed_429,
             "is_truncated": self.is_truncated,

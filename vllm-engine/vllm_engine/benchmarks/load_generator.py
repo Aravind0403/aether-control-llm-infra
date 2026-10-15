@@ -75,6 +75,31 @@ def generate_poisson_arrival_schedule(
     return arrival_times
 
 
+def generate_poisson_arrival_schedule_window(
+    duration_s: float,
+    target_rps: float,
+    seed: Optional[int] = None,
+) -> List[float]:
+    """Generates an open-loop Poisson arrival schedule strictly within [0, duration_s).
+    
+    Draws exponential inter-arrivals until the cumulative time reaches duration_s.
+    Uses default_rng(seed) for reproducible trace replay.
+    """
+    if duration_s <= 0 or target_rps <= 0:
+        return []
+
+    rng = np.random.default_rng(seed)
+    arrival_times = []
+    current_t = 0.0
+    while True:
+        inter_arrival = float(rng.exponential(scale=1.0 / target_rps))
+        current_t += inter_arrival
+        if current_t >= duration_s:
+            break
+        arrival_times.append(current_t)
+    return arrival_times
+
+
 def send_streaming_request(
     api_url: str,
     model_name: str,
@@ -381,6 +406,9 @@ async def async_send_streaming_request(
         is_truncated = not saw_done
         stream_status = "COMPLETED" if saw_done else "TRUNCATED"
         success = saw_done
+        lag_s = submission_lag_ms / 1000.0
+        e2e_from_schedule = e2e_latency + lag_s
+        ttft_from_schedule = (ttft + lag_s) if ttft > 0 else (e2e_latency + lag_s)
 
         return RequestBenchmarkResult(
             prompt_len=prompt_tokens_reported if prompt_tokens_reported > 0 else raw_prompt_len,
@@ -396,6 +424,10 @@ async def async_send_streaming_request(
             ttft=ttft,
             tpot=tpot,
             e2e_latency=e2e_latency,
+            e2e_from_schedule_s=e2e_from_schedule,
+            e2e_from_dispatch_s=e2e_latency,
+            ttft_from_schedule_s=ttft_from_schedule,
+            ttft_from_dispatch_s=ttft,
             inter_event_latencies=inter_event_latencies,
             inter_event_jitter_ms=inter_event_jitter_ms,
             prompt_tokens=prompt_tokens_reported,
