@@ -1,0 +1,58 @@
+{
+  "timestamp": 1792070991.7342098,
+  "target_rps": 14.0,
+  "requests_per_mode": 30,
+  "ttft_target_s": 0.25,
+  "e2e_target_s": 2.5,
+  "gateway_forwarding_delta_p50_ms": 5.775217548944056,
+  "modes": {
+    "Mode 1: Direct vLLM": {
+      "offered": 30,
+      "completed": 30,
+      "shed_429": 0,
+      "failed": 0,
+      "submission_lag_p99_ms": 169.5952095196117,
+      "ttft_p50_ms": 51.7088919878006,
+      "ttft_p99_ms": 357.8611282177737,
+      "e2e_p99_s": 6.4605901700456165,
+      "goodput_rps": 0.0,
+      "goodput_attainment_pct": 0.0
+    },
+    "Mode 2: Forwarding Only": {
+      "offered": 30,
+      "completed": 30,
+      "shed_429": 0,
+      "failed": 0,
+      "submission_lag_p99_ms": 184.6183451381512,
+      "ttft_p50_ms": 57.484109536744654,
+      "ttft_p99_ms": 243.86455339030383,
+      "e2e_p99_s": 2.6821560101269277,
+      "goodput_rps": 6.821927539942012,
+      "goodput_attainment_pct": 73.33333333333333
+    },
+    "Mode 3: Static Concurrency Cap": {
+      "offered": 30,
+      "completed": 13,
+      "shed_429": 17,
+      "failed": 0,
+      "submission_lag_p99_ms": 93.98271848098376,
+      "ttft_p50_ms": 45.781328924931586,
+      "ttft_p99_ms": 68.09275280218571,
+      "e2e_p99_s": 1.8783740680804477,
+      "goodput_rps": 5.71146863927842,
+      "goodput_attainment_pct": 43.333333333333336
+    },
+    "Mode 4: Bounded Queue + Deadline": {
+      "offered": 30,
+      "completed": 8,
+      "shed_429": 22,
+      "failed": 0,
+      "submission_lag_p99_ms": 68.90533994999717,
+      "ttft_p50_ms": 156.37978143058717,
+      "ttft_p99_ms": 358.05162627832027,
+      "e2e_p99_s": 5.231510267241393,
+      "goodput_rps": 0.0,
+      "goodput_attainment_pct": 0.0
+    }
+  }
+}
