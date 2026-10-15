@@ -100,6 +100,39 @@ def generate_poisson_arrival_schedule_window(
     return arrival_times
 
 
+def generate_burst_arrival_schedule(
+    duration_s: float = 60.0,
+    base_rps: float = 10.0,
+    burst_rps: float = 48.0,
+    burst_start_s: float = 20.0,
+    burst_duration_s: float = 10.0,
+    seed: Optional[int] = None,
+) -> List[float]:
+    """Generates a piecewise Poisson arrival schedule with an explicit burst window.
+    
+    Phase 1: [0, burst_start_s) at base_rps
+    Phase 2: [burst_start_s, burst_start_s + burst_duration_s) at burst_rps (surge)
+    Phase 3: [burst_start_s + burst_duration_s, duration_s) at base_rps (recovery)
+    """
+    rng = np.random.default_rng(seed)
+    arrival_times = []
+    current_t = 0.0
+    burst_end_s = burst_start_s + burst_duration_s
+
+    while current_t < duration_s:
+        # Determine rate for current phase
+        if burst_start_s <= current_t < burst_end_s:
+            rate = burst_rps
+        else:
+            rate = base_rps
+        inter_arrival = float(rng.exponential(scale=1.0 / rate))
+        current_t += inter_arrival
+        if current_t < duration_s:
+            arrival_times.append(current_t)
+
+    return arrival_times
+
+
 def send_streaming_request(
     api_url: str,
     model_name: str,
