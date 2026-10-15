@@ -442,8 +442,8 @@ async def run_open_loop_poisson_benchmark(
     own_client = False
     if client is None:
         client = httpx.AsyncClient(
-            timeout=httpx.Timeout(timeout_s, connect=5.0),
-            limits=httpx.Limits(max_connections=500, max_keepalive_connections=100),
+            timeout=httpx.Timeout(timeout_s, connect=10.0),
+            limits=httpx.Limits(max_connections=None, max_keepalive_connections=None),
         )
         own_client = True
 

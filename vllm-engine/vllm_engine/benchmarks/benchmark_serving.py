@@ -84,6 +84,13 @@ class BenchmarkSummary:
     slo_target_s: float = 2.0
     slo_attainment_pct: float = 0.0
 
+    # Explicit Goodput and Dual Latency Objectives
+    ttft_target_s: float = 0.5
+    e2e_target_s: float = 1.5
+    arrival_window_s: float = 0.0
+    goodput_rps: float = 0.0
+    goodput_attainment_pct: float = 0.0
+
     # Backward compatibility fields
     token_jitter_p50_ms: Optional[float] = None
     token_jitter_p99_ms: Optional[float] = None
@@ -98,10 +105,19 @@ class BenchmarkSummary:
 class ServingBenchmarkRunner:
     """Standard OpenAI-compatible API load testing & SLA benchmark runner."""
 
-    def __init__(self, api_url: str, model_name: str, slo_target_s: float = 2.0):
+    def __init__(
+        self,
+        api_url: str,
+        model_name: str,
+        slo_target_s: float = 2.0,
+        ttft_target_s: float = 0.5,
+        e2e_target_s: float = 1.5,
+    ):
         self.api_url = api_url.rstrip("/") + "/v1/chat/completions"
         self.model_name = model_name
         self.slo_target_s = slo_target_s
+        self.ttft_target_s = ttft_target_s
+        self.e2e_target_s = e2e_target_s
 
     def calculate_percentiles(self, values: List[float]) -> Dict[str, float]:
         """Utility to calculate P50, P90, P95, P99 percentiles."""
@@ -120,6 +136,7 @@ class ServingBenchmarkRunner:
         results: List[RequestBenchmarkResult],
         total_duration_s: float,
         measurement_window_s: Optional[float] = None,
+        arrival_window_s: Optional[float] = None,
     ) -> BenchmarkSummary:
         """Aggregates raw request latency metrics into a structured BenchmarkSummary."""
         completed = [r for r in results if r.stream_status == "COMPLETED" and r.success]
@@ -161,6 +178,25 @@ class ServingBenchmarkRunner:
         slo_met_count = sum(1 for r in completed if r.e2e_latency <= self.slo_target_s)
         slo_attainment = (slo_met_count / offered_count * 100.0) if offered_count > 0 else 0.0
 
+        # Goodput: Requests completing successfully within ALL declared latency targets
+        # Divided strictly by the duration of the arrival window
+        compliant = [
+            r for r in completed
+            if (r.ttft <= self.ttft_target_s if self.ttft_target_s > 0 else True)
+            and (r.e2e_latency <= self.e2e_target_s if self.e2e_target_s > 0 else True)
+        ]
+        if arrival_window_s is not None and arrival_window_s > 0:
+            win_arrival = arrival_window_s
+        else:
+            sched_times = [r.scheduled_time for r in results if r.scheduled_time is not None]
+            if len(sched_times) > 1 and max(sched_times) > min(sched_times):
+                win_arrival = max(sched_times) - min(sched_times)
+            else:
+                win_arrival = window_duration
+
+        goodput_rps = len(compliant) / win_arrival if win_arrival > 0 else 0.0
+        goodput_attainment = (len(compliant) / offered_count * 100.0) if offered_count > 0 else 0.0
+
         return BenchmarkSummary(
             total_requests=offered_count,
             successful_requests=len(completed),
@@ -196,4 +232,9 @@ class ServingBenchmarkRunner:
             queue_time_p99_ms=queue_stats["p99"],
             slo_target_s=self.slo_target_s,
             slo_attainment_pct=slo_attainment,
+            ttft_target_s=self.ttft_target_s,
+            e2e_target_s=self.e2e_target_s,
+            arrival_window_s=win_arrival,
+            goodput_rps=goodput_rps,
+            goodput_attainment_pct=goodput_attainment,
         )

@@ -71,3 +71,54 @@ async def test_smoke_test_and_paired_experiment_mock():
     finally:
         server.should_exit = True
         await task
+
+
+@pytest.mark.asyncio
+async def test_open_loop_capacity_calibration_and_four_mode_pilot_mock():
+    from vllm_engine.benchmarks.calibrate_capacity import run_capacity_calibration
+    from vllm_engine.benchmarks.pilot_four_modes import run_pilot
+
+    mock_app = create_mock_vllm_app()
+    port = find_free_port()
+    config = uvicorn.Config(app=mock_app, host="127.0.0.1", port=port, log_level="error", access_log=False)
+    server = uvicorn.Server(config)
+    task = asyncio.create_task(server.serve())
+
+    await asyncio.sleep(0.1)
+    backend_url = f"http://127.0.0.1:{port}"
+
+    try:
+        # Test capacity calibration
+        calib = await run_capacity_calibration(
+            backend_url=backend_url,
+            model_name="mock-model",
+            rates=[10.0, 20.0],
+            requests_per_rate=4,
+            max_tokens=8,
+            ttft_target_s=0.5,
+            e2e_target_s=1.0,
+        )
+        assert "calibrated_capacity_rps" in calib
+        assert len(calib["records"]) == 2
+
+        # Test 4-mode pilot
+        gw_port = find_free_port()
+        pilot = await run_pilot(
+            backend_url=backend_url,
+            model_name="mock-model",
+            target_rps=20.0,
+            requests_per_mode=4,
+            max_tokens=8,
+            ttft_target_s=0.5,
+            e2e_target_s=1.0,
+            gateway_port=gw_port,
+        )
+        assert len(pilot["modes"]) == 4
+        for label, m in pilot["modes"].items():
+            assert m["offered"] == 4
+            assert m["offered"] == m["completed"] + m["shed_429"] + m["failed"]
+            assert m["goodput_rps"] >= 0.0
+            assert 0.0 <= m["goodput_attainment_pct"] <= 100.0
+    finally:
+        server.should_exit = True
+        await task
