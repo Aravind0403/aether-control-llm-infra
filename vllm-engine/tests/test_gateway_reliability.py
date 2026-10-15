@@ -363,3 +363,82 @@ async def test_end_to_end_streaming_with_split_chunks_and_usage():
         assert rec.completion_tokens == 2
         assert rec.status_code == 200
         assert gateway_app.state.controller.active_requests == 0
+
+
+# ---------------------------------------------------------------------------
+# 6. Request Body Failure & Upstream Mid-Stream Disconnect Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_request_body_read_failure_releases_slot(monkeypatch):
+    """Verify that an exception while reading the request body releases the admission slot."""
+    gateway_app = create_gateway_app(
+        backend_url="http://mock-vllm",
+        admission_mode=AdmissionMode.BOUNDED_QUEUE,
+        max_concurrency=1,
+    )
+
+    # Simulate network read error while reading incoming request body
+    async def failing_body(self):
+        raise httpx.ReadError("Client disconnected while sending request payload")
+
+    monkeypatch.setattr(Request, "body", failing_body)
+
+    transport = httpx.ASGITransport(app=gateway_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post("/v1/chat/completions", json={"model": "test", "stream": True})
+        assert resp.status_code == 502
+        # Slot MUST be released back to 0
+        assert gateway_app.state.controller.active_requests == 0
+        assert gateway_app.state.controller.queued_requests == 0
+
+
+@pytest.mark.asyncio
+async def test_upstream_disconnect_midway_through_streaming_releases_slot():
+    """Verify that an upstream crash or disconnect midway through streaming releases the admission slot."""
+    mock_backend = FastAPI()
+
+    @mock_backend.post("/v1/chat/completions")
+    async def broken_stream(req: Request):
+        async def failing_gen():
+            yield b"data: {\"choices\": [{\"delta\": {\"content\": \"First chunk\"}}]}\n\n"
+            await asyncio.sleep(0.01)
+            # Upstream drops connection midway without sending terminal [DONE]
+            raise httpx.RemoteProtocolError("Upstream vLLM crashed or dropped connection")
+
+        return StreamingResponse(failing_gen(), media_type="text/event-stream")
+
+    mock_transport = httpx.ASGITransport(app=mock_backend)
+    gateway_app = create_gateway_app(
+        backend_url="http://mock-vllm",
+        admission_mode=AdmissionMode.BOUNDED_QUEUE,
+        max_concurrency=1,
+    )
+    gateway_transport = httpx.ASGITransport(app=gateway_app)
+
+    async with httpx.AsyncClient(transport=gateway_transport, base_url="http://test") as client:
+        gateway_app.state.client = httpx.AsyncClient(transport=mock_transport, base_url="http://mock-vllm")
+
+        try:
+            async with client.stream(
+                "POST",
+                "/v1/chat/completions",
+                json={"model": "test", "messages": [], "stream": True},
+            ) as resp:
+                assert resp.status_code in (200, 502)
+                async for chunk in resp.aiter_raw():
+                    pass
+        except Exception:
+            pass
+
+        # Slot MUST be released back to 0
+        assert gateway_app.state.controller.active_requests == 0
+        assert gateway_app.state.controller.queued_requests == 0
+
+        # Telemetry must show TRUNCATED or ERROR with status 502
+        records = gateway_app.state.recorder.records
+        assert len(records) > 0
+        rec = records[-1]
+        assert rec.stream_status in ("TRUNCATED", "ERROR")
+        assert rec.status_code == 502
+

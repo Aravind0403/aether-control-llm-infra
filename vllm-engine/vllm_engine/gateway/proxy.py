@@ -461,6 +461,7 @@ async def _handle_streaming_request(
             queue_wait_ms=queue_wait_ms,
             status_code=502,
             admitted=True,
+            stream_status="ERROR",
             error=str(e),
             e2e_latency_ms=(time.perf_counter() - arrival_time) * 1000.0,
         )
@@ -539,6 +540,9 @@ async def _handle_streaming_request(
                 try:
                     chunk = chunk_task.result()
                 except StopAsyncIteration:
+                    break
+                except Exception as e:
+                    logger.warning(f"Upstream stream read error: {e}", extra={"request_id": req_id})
                     break
 
                 now = time.perf_counter()
