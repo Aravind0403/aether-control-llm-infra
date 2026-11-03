@@ -15,16 +15,16 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.10
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install pytest numpy pydantic pyyaml typer rich requests sympy httpx fastapi uvicorn starlette pyarrow scipy "transformers==5.5.0" datasets "trl==0.24.0" peft accelerate "mergekit==0.1.4" llm-blender
+          pip install pytest numpy pydantic pyyaml typer rich requests sympy httpx fastapi uvicorn starlette pyarrow scipy "transformers==5.5.0" datasets "trl==0.24.0" peft accelerate
           pip install -e trainsight/ -e vllm-engine/ -e rlhf-pipeline/
 
       - name: Pre-flight Dataset Quality Inspections (Shift-Left Validation)
