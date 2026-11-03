@@ -25,3 +25,6 @@ model_output/*/
 results/
 **/results/
 
+
+# Local Kubernetes secrets (copy from secrets.example.yaml)
+k8s-infra/manifests/secrets.yaml
