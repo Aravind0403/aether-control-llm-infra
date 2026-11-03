@@ -154,7 +154,7 @@ def test_dpo_inspector_reconciles_ultrafeedback_1000():
     - 16 over-budget prompts (> 1024 tokens)
     - 0 prompt mismatches or missing fields
     """
-    dataset_path = Path("trainsight/sample_data/real_ultrafeedback_1000.jsonl")
+    dataset_path = Path(__file__).resolve().parents[1] / "sample_data" / "real_ultrafeedback_1000.jsonl"
     assert dataset_path.exists(), f"Sample dataset missing at {dataset_path}"
 
     inspector = DPOInspector(tokenizer_name="Qwen/Qwen2.5-1.5B-Instruct")
