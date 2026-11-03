@@ -29,7 +29,7 @@ profile:
 
 k8s-dev:
 	@echo "☸️ Applying local Kubernetes dev manifests..."
-	kubectl apply -f k8s-infra/manifests/secrets.yaml
+	kubectl apply -f k8s-infra/manifests/secrets.yaml  # create from secrets.example.yaml first
 	kubectl apply -f k8s-infra/manifests/local-dev-deployment.yaml
 	kubectl apply -f k8s-infra/manifests/prometheus-grafana.yaml
 	@echo "✨ Kubernetes manifests applied successfully!"
