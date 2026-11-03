@@ -39,6 +39,7 @@ gcloud container clusters get-credentials aethercontrol-gke --region us-central1
 gsutil cp trainsight/sample_data/sample_gsm8k.jsonl gs://aethercontrol-dev-aethercontrol-datasets/gsm8k_subset.jsonl
 
 # 3. Apply Kubernetes Secrets & Manifests
+cp k8s-infra/manifests/secrets.example.yaml k8s-infra/manifests/secrets.yaml   # then edit the placeholder values
 kubectl apply -f k8s-infra/manifests/secrets.yaml
 kubectl apply -f k8s-infra/manifests/vllm-deployment.yaml
 kubectl apply -f k8s-infra/manifests/dcgm-exporter.yaml
