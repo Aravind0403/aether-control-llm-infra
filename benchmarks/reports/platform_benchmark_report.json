@@ -1,18 +1,18 @@
 {
-  "timestamp": 1791894425.006763,
+  "timestamp": 1793682864.0441191,
   "mode": "analytical",
   "live_endpoint": null,
   "stages": {
     "stage_1_trainsight": {
       "meta_probe": {
-        "probe_latency_ms": 4.304,
+        "probe_latency_ms": 4.486,
         "probed_layer_mb": 89.26,
         "total_static_gb": 3.31,
         "sla_target_ms": 15.0,
         "status": "PASS"
       },
       "signature_cache": {
-        "hash_latency_ms": 0.447,
+        "hash_latency_ms": 0.549,
         "sla_target_ms": 10.0,
         "status": "PASS"
       },
@@ -33,7 +33,7 @@
     "stage_2_rlhf": {
       "verifier_contract": {
         "pairs_tested": 15,
-        "latency_ms": 1.02,
+        "latency_ms": 1.14,
         "status": "PASS"
       },
       "radix_kv_deduplication": {
@@ -88,7 +88,7 @@
       },
       "semantic_oracle": {
         "anti_gaming_target": "70b_deep_lane",
-        "oracle_latency_ms": 0.014,
+        "oracle_latency_ms": 0.016,
         "status": "PASS"
       },
       "spot_handoff_timeline": {
@@ -109,7 +109,7 @@
       },
       "shared_memory_cache": {
         "storage_medium": "/dev/shm",
-        "read_latency_ms": 0.0008,
+        "read_latency_ms": 0.0005,
         "num_metrics_returned": 9,
         "is_driver_mutex_acquired": false,
         "status": "PASS"
@@ -117,7 +117,7 @@
       "kernel_xid_trap": {
         "xid_code": 45,
         "applied_node_taint": "node.kubernetes.io/unschedulable:NoSchedule",
-        "quarantine_latency_ms": 0.005,
+        "quarantine_latency_ms": 0.003,
         "zero_polling_overhead": true,
         "status": "PASS"
       }

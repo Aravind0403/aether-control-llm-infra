@@ -26,7 +26,7 @@ def test_dpo_tensor_reconciliation_all_993_rows(preprocessor: DPOPreprocessor):
     3. Exactly 16 prompts exceed 1024 tokens and are deterministically left-truncated to 1024.
     4. Truncated prompts retain the generation prompt suffix (<|im_start|>assistant\\n).
     """
-    dataset_path = Path("trainsight/sample_data/clean_ultrafeedback_993.jsonl")
+    dataset_path = Path(__file__).resolve().parents[1] / "sample_data" / "clean_ultrafeedback_993.jsonl"
     assert dataset_path.exists(), f"Dataset file not found at {dataset_path}"
 
     rows = []
@@ -85,7 +85,7 @@ def test_dpo_loss_mask_and_token_probabilities(preprocessor: DPOPreprocessor):
     - completion padding positions receive loss_mask == 0
     - only real completion tokens receive loss_mask == 1
     """
-    dataset_path = Path("trainsight/sample_data/clean_ultrafeedback_993.jsonl")
+    dataset_path = Path(__file__).resolve().parents[1] / "sample_data" / "clean_ultrafeedback_993.jsonl"
     with open(dataset_path, "r", encoding="utf-8") as f:
         sample_rows = [json.loads(f.readline()) for _ in range(4)]
 
@@ -126,7 +126,7 @@ def test_dpo_trl_data_collator_smoke_batch(preprocessor: DPOPreprocessor):
     Verifies that the preprocessed records pass through TRL's real DataCollatorForPreference
     and DPOTrainer.concatenated_inputs without shape errors or prompt divergence.
     """
-    dataset_path = Path("trainsight/sample_data/clean_ultrafeedback_993.jsonl")
+    dataset_path = Path(__file__).resolve().parents[1] / "sample_data" / "clean_ultrafeedback_993.jsonl"
     with open(dataset_path, "r", encoding="utf-8") as f:
         # Pick 4 rows including at least one over-budget prompt
         rows = [json.loads(line) for line in f]
@@ -181,7 +181,7 @@ def test_dpo_tensor_reconciliation_option_a_976_rows(preprocessor: DPOPreprocess
     5. Exactly 123 tied-score pairs retained as label-confidence context (0 reversals).
     6. Zero identical assistant responses.
     """
-    dataset_path = Path("trainsight/sample_data/clean_ultrafeedback_976.jsonl")
+    dataset_path = Path(__file__).resolve().parents[1] / "sample_data" / "clean_ultrafeedback_976.jsonl"
     assert dataset_path.exists(), f"Dataset file not found at {dataset_path}"
 
     rows = []
@@ -245,7 +245,7 @@ def test_dpo_tensor_reconciliation_eval_191_rows(preprocessor: DPOPreprocessor):
     3. Zero completion truncations (intact EOS tokens).
     4. Exactly 19 tied scores, 0 reversals, 0 identical pairs.
     """
-    dataset_path = Path("trainsight/sample_data/eval_ultrafeedback_test_191.jsonl")
+    dataset_path = Path(__file__).resolve().parents[1] / "sample_data" / "eval_ultrafeedback_test_191.jsonl"
     assert dataset_path.exists(), f"Dataset file not found at {dataset_path}"
 
     rows = []
