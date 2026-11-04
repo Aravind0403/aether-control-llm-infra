@@ -9,7 +9,7 @@
 **Generation Constraints**: `min_tokens = 64`, `max_tokens = 64` (strictly verified across all responses)  
 **SLO Targets**: $\text{TTFT} \le 250\text{ ms}$, $\text{E2E} \le 2.50\text{ s}$  
 **Frozen Admission Parameters**: `max_concurrency = 36`, `max_queue = 36`, `deadline_ms = 250.0 ms`  
-**Total Paired Runs**: 48 runs (4 traffic regimes $\times$ 3 independent seeds $\times$ 4 modes; $> 59,000$ evaluated requests)  
+**Total Paired Runs**: 48 runs (4 traffic regimes $\times$ 3 independent seeds $\times$ 4 modes; 58,528 evaluated requests)  
 **Vast.ai Instance**: `56110283` (provisioned, tested, verified destroyed; 0 ongoing cloud instances)
 
 ---
@@ -31,9 +31,9 @@ This experiment executes a rigorous paired scientific comparison across four ser
 2. **Burst Smoothing vs. Premature Shedding**: At the near-capacity knee (35 RPS) and during traffic bursts, Mode 4 (Bounded Queue) absorbs incoming surges that Mode 3 is forced to shed immediately:
    - In Regime B (35 RPS), Mode 4 completed **$1,423.7 \pm 8.5$** requests vs. **$1,284.0 \pm 8.5$** in Mode 3 (reducing shedding from $255.0$ down to $115.3$ requests, a $55\%$ reduction).
    - In Regime D (Burst), Mode 4 completed **$679.7 \pm 30.5$** requests vs. **$635.7 \pm 5.5$** in Mode 3 (shedding $44$ fewer requests).
-3. **Overload SLO Protection**: Under sustained overload (48 RPS), direct unconstrained serving suffers queue pileup:
-   - Direct vLLM E2E P99 escalates to **$2.57\text{ s}$** (breaching the $2.50\text{ s}$ SLO target, attainment dropping to $96.1\% \pm 3.5\%$).
-   - Static Concurrency Cap (Mode 3) strictly defends admitted request latency: E2E P99 remains bounded at **$1.50\text{ s}$** and TTFT P99 at **$69.6\text{ ms}$**, shedding $743.3 \pm 25.4$ excess requests cleanly via HTTP 429.
+3. **Overload SLO Protection & Goodput Tradeoff**: Under sustained overload (48 RPS), direct unconstrained serving suffers queue pileup:
+   - Direct vLLM E2E P99 escalates to **$2.57\text{ s}$** (breaching the $2.50\text{ s}$ SLO target, attainment dropping to $96.1\% \pm 3.5\%$), but sustains **$44.98 \pm 1.63\text{ RPS}$** target-compliant goodput.
+   - Static Concurrency Cap (Mode 3) strictly defends admitted request latency: E2E P99 remains bounded at **$1.50\text{ s}$** and TTFT P99 at **$69.6\text{ ms}$**, but drops target-compliant goodput to **$30.27 \pm 0.35\text{ RPS}$** (a $32.7\%$ goodput reduction) by shedding $743.3 \pm 25.4$ excess requests cleanly via HTTP 429.
 4. **The Queue Deadline Tradeoff**: In Mode 4, requests that wait in the admission queue consume the client's TTFT budget ($\text{TTFT}_{\text{client}} = \text{queue\_wait} + \text{prefill}$). Under sustained overload (48 RPS), queued requests wait up to the $250\text{ ms}$ deadline, driving TTFT P99 to $602.2\text{ ms}$ ($> 250\text{ ms}$ target). Hence, queue deadlines must be configured with explicit awareness of the prefill budget.
 
 ---

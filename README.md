@@ -68,10 +68,10 @@ Mode 4: Bounded Queue + Deadline     100.0%     1.13 s         82.6%     1.64 s 
 ```
 *\*Values marked with an asterisk breach the 2.50 s E2E SLO target.*
 
-**Key Empirical Findings from 48 Paired Runs (>59,000 requests):**
+**Key Empirical Findings from 48 Paired Runs (58,528 requests):**
 - **Proxy Overhead**: At light load, Aether Gateway forwarding adds $+3.2\text{ ms}$ TTFT P99 and $+40\text{ ms}$ E2E P99 overhead with zero rejections.
 - **Burst Smoothing vs. Premature Shedding**: In near-capacity traffic (35 RPS), Mode 4 absorbs micro-bursts into the queue, reducing shedding by $55\%$ compared to static cap ($115.3$ vs $255.0$ shed requests) while completing $+140$ additional requests.
-- **Overload SLO Protection**: Under sustained 48 RPS overload, direct unconstrained serving breaches the 2.50 s SLO boundary ($\text{E2E P99} = 2.57\text{ s}$). Mode 3 (Static Cap) strictly bounds admitted request latency ($\text{E2E P99} = 1.50\text{ s}$) via clean HTTP 429 shedding.
+- **Overload SLO Protection & Goodput Cost**: Under sustained 48 RPS overload, direct unconstrained serving breaches the 2.50 s SLO boundary ($\text{E2E P99} = 2.57\text{ s}$, delivering $44.98\text{ RPS}$ target-compliant goodput). Mode 3 (Static Cap) strictly bounds admitted request latency ($\text{E2E P99} = 1.50\text{ s}$) via clean HTTP 429 shedding, but sacrifices goodput from $44.98\text{ RPS}$ to $30.27\text{ RPS}$ (a $32.7\%$ goodput loss, shedding $743.3$ excess requests).
 - **Queue Residency Tradeoff**: Queue wait time directly consumes the client-perceived TTFT budget. Under sustained overload, queued requests wait up to the deadline, causing TTFT P99 to reach $602.2\text{ ms}$ ($> 250\text{ ms}$ SLO).
 
 **Boundary:** Admission control shapes and protects admitted request latency by shedding excess load; it does not accelerate GPU prefill or decode computation.
@@ -162,7 +162,7 @@ Results below apply to the stated configurations and workloads on physical silic
 
 | Experiment | Scope | Observation | Interpretation |
 |---|---|---|---|
-| **Serving 4-mode paired** | Qwen2.5-1.5B, vLLM 0.7.2, RTX 4090, 48 paired runs (>59,000 reqs) across 4 regimes | Gateway proxy overhead = +3.2 ms TTFT P99, +40 ms E2E P99 at 10 RPS. Under 48 RPS overload, direct vLLM breaches 2.5s SLO (2.57s E2E P99), while static cap strictly bounds E2E to 1.50s. Bounded queue cuts near-capacity shedding by 55% (+140 completions). | Quantified tradeoff: unconstrained serving cascades under overload; static cap defends latency via shedding; bounded queue smooths micro-bursts. |
+| **Serving 4-mode paired** | Qwen2.5-1.5B, vLLM 0.7.2, RTX 4090, 48 paired runs (58,528 reqs) across 4 regimes | Gateway proxy overhead = +3.2 ms TTFT P99, +40 ms E2E P99 at 10 RPS. Under 48 RPS overload, direct vLLM breaches 2.5s SLO (2.57s E2E P99, 44.98 RPS goodput), while static cap strictly bounds E2E to 1.50s at the cost of reducing goodput to 30.27 RPS (shedding 743 requests). Bounded queue cuts near-capacity shedding by 55% (+140 completions). | Quantified tradeoff: unconstrained serving cascades under overload; static cap defends latency via shedding (sacrificing 32.7% goodput); bounded queue smooths micro-bursts. |
 | **Serving calibration** | Qwen2.5-1.5B, direct vLLM, RTX 4090, 11 offered rates (6–50 RPS), fixed 64-tok outputs | 100% attainment up to 35 RPS (2.17s E2E P99). First reproducible SLO failure at 40 RPS (94.6% attainment, 2.77s E2E P99). Saturation at 45–50 RPS (85.2% attainment). | Established true empirical capacity knee (35 RPS) and overload boundary (40+ RPS) on physical silicon. |
 | **Serving repeatability** | Qwen2.5-1.5B, direct vLLM, RTX 4090, 3 consecutive 180s trials at 6 RPS (3,207 reqs) | 100% attainment across all 3,207 requests; 0 failures; lag P99 = 2.01 ms; Run 2 early slowdown (t ≤ 30.5s) fully reconciled. | Harness validated for deterministic trace replay and low submission lag. |
 | **SFT batching** | Qwen2.5-1.5B, answer-only LoRA, 1,000 GSM8K examples, RTX 3090, five paired runs | 25.76% ± 0.45% fewer padded tokens; 29.28% ± 0.65% higher useful-input-token throughput | Measured performance benefit for this setup; no established peak-memory saving |
